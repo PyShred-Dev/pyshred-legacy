@@ -2,7 +2,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.utils.extmath import randomized_svd
 from .utils import *
 
-class SHREDDataProcessor:
+class ParametricSHREDDataProcessor:
     """
     SHREDDataProcessor manages a single dataset.
     SHREDDataProcessor objects are created by the `add` method in SHREDDataManager.
@@ -12,10 +12,13 @@ class SHREDDataProcessor:
     """
     METHODS = {"random", "sequential"}
 
-    def __init__(self, data, random_sensors, stationary_sensors, mobile_sensors, lags, time, compression, scaling, id):
+    def __init__(self, data, random_sensors, stationary_sensors, mobile_sensors, lags, time, compression, scaling, parametric, params, id):
+        #TODO: allow for file path as well as prepared numpy arrays.
+        #TODO: allow params to be based in (will be similar to extra sensors, should stay constant between trajectories)
         """
         Inputs:
-        - data: file path to a .npz file. (string)
+        - manager: reference to SHREDDataManager object that created and initialized this SHREDDataProcessor
+        - data: numpy array of shape (optional n_trajectories, n_time, x1, x2, x3,...,xN) where x is spatial dimensions
         - random_sensors: number of randomly placed stationary sensors (integer).
         - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
                               If multiple stationary sensors, put tuples into a list (tuple or list of tuples).
@@ -25,16 +28,19 @@ class SHREDDataProcessor:
         - lags: number of time steps to look back (integer).
         - compression: dimensionality reduction (boolean or integer).
         - scaling: scaling settings ('minmax', 'standard').
+        - params: dataset of parameters of shape (nparams, ntimes), time on last axis just like with data. (string or numpy array)
         - id: unique identifier for the dataset (string).
         """
-        if compression is not None:
-            if compression == True:
-                self.n_components = 20
-            elif isinstance(compression, int):
-                self.n_components = compression
-            else:
-                raise ValueError('Compression must be a bool or an int.')
-        self.full_state_data = get_data(data) # full-state data where the first axis is time (axis 0)
+        self.data = data
+        # self.data = get_data(data) # full-state data where the last axis is time
+        self.n_components = compression # DAVID THIS IS FOR TESTING ONLY TODO: add processing/validation
+        self.full_state_data = None
+        self.params = params
+        self.parametric = parametric
+        if self.parametric is False:
+            # Add a new axis at the beginning for trajectory (n_trajectory = 1)
+            self.data = np.expand_dims(self.data, axis=0)
+
         self.random_sensors = random_sensors # number of randomly placed sensors
         self.stationary_sensors = stationary_sensors # stationary sensor locations
         self.mobile_sensors = mobile_sensors # mobile sensor locations
@@ -50,46 +56,128 @@ class SHREDDataProcessor:
         self.right_singular_values = {}
         self.scaler = {} # stores scaler of full-state data
         self.transformed_data = {}
-        self.original_shape = self.full_state_data.shape
+        self.original_shape = self.data.shape
+        self.train_indices = None
+        self.val_indices = None
+        self.test_indices = None
+        self.sensor_measurements = None # sensor measurements of shape (n_sensors, t), time on last axis
+        self.sensor_summary = None # summary of sensor locations
+
+    # TODO: Move self.full_state_data from __init__ to a method called add or something
+    # adding the very first trajectory/data should be no different from adding a
+    # second trajectory. What should stay constant is the sensor location, and
+    # number of params if any. Sensor measurements if passed in raw will change,
+    # and the actual params (optional) values will change.
+    # compress/scaled each trajectory seperately or at the end? Do they need
+    # different scalers/compression components or same?
+    # How should different trajectories be stored?
+
+    # def add_trajectory():
+    #     """
+    #     Add a new trajectory (e.g. multiple experiments with different parameters).
+    #     Expects sensors and field to be the same.
+    #     """
+
+
+
+
+
+    # def add_parameters():
+    #     """
+    #     problem if add it here because need to flatten earlier no?
+    #     Not a problem! Add parameter associated to each trajectory only. Won't
+    #     need a extra dimension for parameters since using add functions only...
+    #     """
+
+    # will not work with forecastor, only for reconstructor
+    # TODO: SHRED wrapper will know not to fit forecastor if not forecastor data.
+    # shouldn't have method, should by default choose random trajectories, otherwise use select, sequential not necessary
+    
 
     def generate_dataset(self, train_indices, val_indices, test_indices, method):
         """
         Sets train, validation, and test SHREDDataset objects with generated dataset.
         """
+        # saves indices as attributes for adding new trajectory
+        self.train_indices = train_indices
+        self.val_indices = val_indices
+        self.test_indices = test_indices
+
         X_train, X_valid, X_test = None, None, None
         y_train, y_valid, y_test = None, None, None
-        # get sensor data
-        sensor_measurements_dict = get_sensor_measurements(self.full_state_data, self.random_sensors, self.stationary_sensors, self.mobile_sensors) # get sensor data
-        self.sensor_measurements = sensor_measurements_dict['sensor_measurements']
-        self.sensor_summary = sensor_measurements_dict['sensor_summary']
-        # check if sensor_measurements exist
-        if self.sensor_measurements.size != 0:
-            # fit
-            self.fit_sensors(train_indices, method)
-            # transform
-            self.transform_sensor(method)
-            # generate X data
-            # if method == 'random':
-            X_train, X_valid, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
-            # elif method == 'sequential':
-            #     X_train, X_valid, X_test = self.generate_X_forecaster(train_indices, val_indices, test_indices, method)
-        if method == 'random':
-            # flattens full state data into into 2D array with time along axis 1.
-            self.full_state_data = self.flatten(self.full_state_data)
-            print('self.full_state_data flattened', self.full_state_data.shape)
-            # fit (fit and transform can be combine with a wrapper or just integrate the code together)
-            self.fit(train_indices, method)
-            # transform
-            self.transform(method)
-            # generate y data
-            y_train, y_valid, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
-            self.full_state_data = self.unflatten(self.full_state_data)
-        elif method == 'sequential':
-            y_train, y_valid, y_test = self.generate_y_forecaster(X_train, X_valid, X_test)
-            # remove final timestep of X since no y (next sensor measurement) exists for the final timestep
-            X_train = X_train[:-1, :, :]
-            X_valid = X_valid[:-1, :, :]
-            X_test = X_test[:-1, :, :]
+
+        # Processing regarding X
+
+        # Parametric Case:
+        if self.parametric:
+            for i in train_indices:
+                sensor_measurements_dict = get_sensor_measurements(self.data[i], self.random_sensors, self.stationary_sensors, self.mobile_sensors) # get sensor data
+                if self.sensor_measurements is None:
+                    self.sensor_measurements = sensor_measurements_dict['sensor_measurements']
+                else:
+                    self.sensor_measurements = np.vstack((self.sensor_measurements, sensor_measurements_dict['sensor_measurements']))
+                self.sensor_summary = sensor_measurements_dict['sensor_summary']
+
+                if self.sensor_summary is None:
+                    self.sensor_summary = sensor_measurements_dict['sensor_summary']
+                else:
+                    self.sensor_summary = pd.concat([self.sensor_summary, sensor_measurements_dict['sensor_summary']], 
+                                                    axis = 0).reset_index(drop=True)
+            # check if sensor_measurements exist
+            if self.sensor_measurements.size != 0:
+                    # fit
+                    # self.fit_sensors(self.data[i].shape[0], method) # use all time indices of train trajectories
+                    self.fit_sensors(len(self.time), method) # use all time indices of train trajectories
+                    # transform
+                    self.transform_sensor(method)
+                    # generate X data
+                    X_train, X_valid, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
+
+        # Non-parametric Case:
+        if self.parametric is False:
+            for i in range(self.data.shape[0]):
+                sensor_measurements_dict = get_sensor_measurements(self.data[i], self.random_sensors, self.stationary_sensors, self.mobile_sensors) # get sensor data
+                if self.sensor_measurements is None:
+                    self.sensor_measurements = sensor_measurements_dict['sensor_measurements']
+                else:
+                    self.sensor_measurements = np.vstack((self.sensor_measurements, sensor_measurements_dict['sensor_measurements']))
+                self.sensor_summary = sensor_measurements_dict['sensor_summary']
+
+                if self.sensor_summary is None:
+                    self.sensor_summary = sensor_measurements_dict['sensor_summary']
+                else:
+                    self.sensor_summary = pd.concat([self.sensor_summary, sensor_measurements_dict['sensor_summary']], 
+                                                    axis = 0).reset_index(drop=True)
+            # check if sensor_measurements exist
+            if self.sensor_measurements.size != 0:
+                    # fit
+                    self.fit_sensors(train_indices, method)
+                    # transform
+                    self.transform_sensor(method)
+                    # generate X data
+                    X_train, X_valid, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
+        
+        # parametric case
+
+
+        
+        # Processing regarding Y
+        # flattens full state data into into 2D array with time along axis 0.
+        for i in range(self.data.shape[0]):
+            if self.full_state_data is None:
+                self.full_state_data = self.flatten(self.data[i])
+            else:
+                self.full_state_data = np.vstack((self.full_state_data, self.flatten(self.data[i])))
+
+        # fit (fit and transform can be combine with a wrapper or just integrate the code together)
+        self.fit(train_indices, method)
+        # transform
+        self.transform(method)
+        # generate y data
+        y_train, y_valid, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
+        self.full_state_data = None
+        print('done generating dataset')
+        # full_state_data = self.unflatten(full_state_data)
         if X_train is not None and X_valid is not None and X_test is not None: # aka make sure sensor data exists, does not work for setting train, validation, and test to None/0 yet
             return {
                 'train': (X_train, y_train),
@@ -113,7 +201,6 @@ class SHREDDataProcessor:
         """
         if method not in self.METHODS:
             raise ValueError(f"Invalid method '{method}'. Choose from {self.METHODS}.")
-
         # scaling full-state data
         if self.scaling is not None:
             scaler_class = MinMaxScaler if self.scaling == 'minmax' else StandardScaler
@@ -126,10 +213,15 @@ class SHREDDataProcessor:
         Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
         self.transformed_sensor_data to scaled scnsor_data (optional) have time on axis 0 (transpose).
         """
+        # Transpose compressed data, time on axis 0
+        # transformed_sensor_data = self.sensor_measurements.T
         # Perform scaling if all scaler-related attributes exist
         if self.sensor_scaler.get(method) is not None:
             self.transformed_sensor_data[method] = self.sensor_scaler[method].transform(self.sensor_measurements)
     
+
+    def fit_transform(self, train_indices, method):
+        pass
     
     def fit(self, train_indices, method):
         """
@@ -150,38 +242,23 @@ class SHREDDataProcessor:
             self.scaler_before_svd[method] = sc
             full_state_data_std_scaled = sc.transform(self.full_state_data)
             # rSVD
+            print('full_state_data_std_scaled.shape should be ntimes * ntraj * train_size',full_state_data_std_scaled.shape)
             U, S, V = randomized_svd(full_state_data_std_scaled[train_indices, :], n_components=self.n_components, n_iter='auto')
-            print('n_components', self.n_components)
-            print('V.shape', V.shape)
+
+            # TODO fit compression
             self.right_singular_values[method] = V
             self.left_singular_values[method] = U
             self.singular_values[method] = S
-
             compressed_full_state_data = self.full_state_data @ V.transpose()
-
             print("compressed full_state_data:", compressed_full_state_data.shape)
+
         # transpose self.full_state_data so time on axis 0
         # self.full_state_data = self.full_state_data.T
         # transpose V_component so time on axis 0
         # V_component = V_component.T
 
-        # try:
-        #     # scaling full-state data
-        #     if self.scaling is not None:
-        #         scaler_class = MinMaxScaler if self.scaling == 'minmax' else StandardScaler
-        #         scaler = scaler_class()
-        #         if self.n_components is not None:
-        #             self.scaler[method] = scaler.fit(V_component)
-        #         else:
-        #             self.scaler[method] = scaler.fit(self.full_state_data[train_indices])
 
-        # # un-tranpose self.full_state_data so time on axis 1
-        # finally:
-        #     self.full_state_data = self.full_state_data.T
-
-        
         # scaling full-state data
-
         if self.scaling is not None:
             scaler_class = MinMaxScaler if self.scaling == 'minmax' else StandardScaler
             scaler = scaler_class()
@@ -190,6 +267,7 @@ class SHREDDataProcessor:
             else:
                 self.scaler[method] = scaler.fit(self.full_state_data[train_indices])
 
+
     def transform(self, method):
         """
         Expects self.full_state_data to be flattened with time on axis 0.
@@ -197,16 +275,16 @@ class SHREDDataProcessor:
         """
         # Perform compression if all compression-related attributes exist
         if self.right_singular_values.get(method) is not None and self.scaler_before_svd[method] is not None:
-            print('self.full_state_data pre transform', self.full_state_data.shape)
             transformed_data = self.scaler_before_svd[method].transform(self.full_state_data)
-            print('transformed_data_std_scale', transformed_data.shape)
+            # TODO: transformed_data now shape (t, nstate) DAVID LOOK HERE
+            # use matteo's
+
             transformed_data = transformed_data @ np.transpose(self.right_singular_values.get(method))
-            print('transformed_data', transformed_data.shape)
+
             # s_matrix = np.diag(self.singular_values[method]) # diagonal matrix of singular values
             # s_inv = np.linalg.inv(s_matrix) # compute inverse of singular values matrix
             # transformed_data = np.dot(s_inv, np.dot(self.left_singular_values.get(method).T, transformed_data)) # calculate V_T
-        else:
-            transformed_data = self.full_state_data
+
         # Transpose compressed data, time on axis 0
         # transformed_data = transformed_data.T
 
@@ -229,28 +307,6 @@ class SHREDDataProcessor:
         test = lagged_sensor_sequences[test_indices]
         return train, valid, test
     
-    # def generate_X_forecaster(self, train_indices, val_indices, test_indices, method):
-    #     """
-    #     Generates the input data for SHRED.
-    #     Expects self.sensor_measurements to be a 2D numpy array with time is axis 0.
-    #     Output: 3D torch.tensor with timesteps along axis 0, lags along axis 1, sensors along axis 2.
-    #     Output: 3D numpy arrays with timesteps along axis 0, lags along axis 1, sensors along axis 2.
-    #     """
-    #     # need to pass in the first lags number of data set well though
-    #     # add one so forecaster can predict the very first frame
-    #     # padding is expanded by one, so first prediction is the very first non-padded value
-    #     lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags+1)
-    #     train = lagged_sensor_sequences[train_indices+1]
-    #     valid = lagged_sensor_sequences[val_indices+1]
-    #     test = lagged_sensor_sequences[test_indices+1]
-    #     return train, valid, test
-    
-    def generate_y_forecaster(self, X_train, X_valid, X_test): 
-        train = X_train[1:, -1, :]  # Use the sensor measurements at the next timestep (1399, 5)
-        valid = X_valid[1:, -1, :]
-        test = X_test[1:, -1, :]
-        return train, valid,test
-
     def generate_y(self, train_indices, val_indices, test_indices, method):
         """
         Generates the target data for SHRED.
@@ -265,7 +321,7 @@ class SHREDDataProcessor:
         valid = self.transformed_data[method][val_indices]
         test = self.transformed_data[method][test_indices]
         return train, valid, test
-
+    
     def flatten(self, data):
         """
         Takes in a nd array where the time is along the axis 0.

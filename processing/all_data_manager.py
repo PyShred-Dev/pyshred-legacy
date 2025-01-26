@@ -12,51 +12,74 @@ class SHREDDataManager:
     - postprocess
     """
 
-    def __init__(self, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15, scaling = "minmax", compression = True, reconstructor=True, forecastor=True):
+    # TODO: Recon, Predict, Forecast, will need sensor summary to notify user order of sensor measurements
+    # TODO: sensor summary will also need to include parameter summary
+    # TODO: each sensor and parameter can be identified to a dataset/field/regime with the unique id of the SHREDDataProcessor
+
+    def __init__(self, parametric = False, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15,
+                 scaling = "minmax", compression = True, reconstructor=True, forecastor=True):
+        self.parametric = parametric
+        self.lags = lags # number of time steps to look back
         self.scaling = scaling
         self.compression = compression
         self.time = time
-        self.lags = lags # number of time steps to look back
-        self.data_processors = [] # a list storing SHREDDataProcessor objects
-        self.reconstructor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED reconstructor
-        self.forecastor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED forecastor
         self.train_size = train_size
         self.val_size = val_size
         self.test_size = test_size
+        self.reconstructor_flag = reconstructor
+        self.forecastor_flag = forecastor
+    
+        self.data_processors = [] # a list storing references to SHREDDataProcessor objects being managed
+        self.reconstructor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED reconstructor
+        self.forecastor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED forecastor
+
         self.train_dataset = None
         self.valid_dataset = None
         self.test_dataset = None
         self.reconstructor_data_elements = []
         self.forecastor_data_elements = []
-        self.reconstructor_flag = reconstructor
-        self.forecastor_flag = forecastor
+ 
         # self.reconstructor = reconstructor # flag for generating datasets for SHRED reconstructor
         # self.forecastor = forecastor # flag for generating datasets for SHRED forecaster
 
-    def add(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = True, id = None, scaling = "minmax", time = None):
+    #TODO: allow for sensor measurments as well
+    #TODO: allow for params as well, maybe a list of array, ea ch array shape (params,time)
+    def add(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, params=None, compression=None, scaling=None, time=None, id=None, parametric = None):
         """
         Creates and adds a new SHREDDataProcessor object.
-        - file path: file path to data (string)
+        - file path: file path or list of file paths (if multiple trajectories) to data (string, list)
         - random_sensors: number of randomly placed stationary sensors (integer).
         - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
                               If multiple stationary sensors, put tuples into a list (tuple or list of tuples).
         - mobile_sensors: list of coordinates (tuple) for a mobile sensor (length of list should match number of timesteps in `data`).
                           If multiple mobile_sensors, use a nested list (list of tuples, or nested list of tuples).
-        - time: 1D numpy array of timestamps
+        - time: 1D numpy array of timestamps or list of 1D numpy arrays (if multiple trajectories)
         - lags: number of time steps to look back (integer).
         - compression: dimensionality reduction (boolean or integer).
         - scaling: scaling settings ('minmax', 'standard').
         - id: unique identifier for the dataset (string).
         """
+        data = get_data(data)
         compression = compression if compression is not None else self.compression
         scaling = scaling if scaling is not None else self.scaling
         time = time if time is not None else self.time
-        # generate train/val/test indices based on effective number of timesteps in initial SHREDDataProcessor object
+        parametric = parametric if parametric is not None else self.parametric
+        
+        # generate train/val/test indices based on number of timesteps in initial SHREDDataProcessor object
         if len(self.data_processors) == 0:
-            self.reconstructor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
-            self.forecastor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
+            if parametric is False:
+                # non-parametric case, train/val/test split by time indices
+                self.reconstructor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
+                self.forecastor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
+            else:
+                # parametric case, train/val/test split by parameters (trajectories)
+                self.reconstructor_indices = get_train_val_test_indices(data.shape[0], self.train_size, self.val_size, self.test_size, method = "random")
+                self.forecastor_indices = get_train_val_test_indices(data.shape[0], self.train_size, self.val_size, self.test_size, method = "sequential")
+        
         # create and initialize SHREDData object
         data_processor = SHREDDataProcessor(
+            parametric= self.parametric,
+            params = params, # add method dependent, might add data from a field without params?
             data=data,
             random_sensors=random_sensors,
             stationary_sensors=stationary_sensors,
@@ -65,7 +88,7 @@ class SHREDDataManager:
             time=time,
             compression=compression,
             scaling=scaling,
-            id=id
+            id=id,
         )
         if self.reconstructor_flag:
             dataset_dict = data_processor.generate_dataset(

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+
 class SHREDDataset():
     """
     recon_data is a TimeSeriesDataset object for SHRED Reconstructor
@@ -57,23 +58,31 @@ def get_train_val_test_indices(n, train_size, val_size, test_size, method):
     num_val_indices = int(val_size * n)
 
     train_indices = indices[:num_train_indices]
+    if num_train_indices == 0 or num_val_indices == 0 or len(train_indices) == 0:
+        raise ValueError('Legnth of train_indices, val_indices, and test_indices each be length > 0.')
+    # shuffle train indices to ensure generalization
+    # NOTE: while train indices are being shuffled, the lags themselves is maintain the natural temporal order.
+    train_indices = np.random.permutation(train_indices)
     val_indices = indices[num_train_indices:num_train_indices + num_val_indices]
     test_indices = indices[num_train_indices + num_val_indices:]
-
     return {
         "train": train_indices,
         "validation": val_indices,
         "test": test_indices,
     }
 
-def get_data(file_path):
+
+def get_data(data):
     """
-    Returns a single numpy array from the given file_path
+    Takes in a file_path or a numpy array
+    Returns a single numpy array
     """
-    if file_path.endswith('.npz'):
-        return get_data_npz(file_path)
+    if isinstance(data, str) and data.endswith('.npz'):
+        return get_data_npz(data)
+    elif isinstance(data, np.ndarray):
+        return data
     else:
-        raise ValueError(f"Unsupported file type: '{file_path}'. Only .npz files are supported.")
+        raise ValueError(f"Unsupported input type: {type(data)}. Only .npz file paths or numpy arrays are supported.")
 
 
 def get_data_npz(file_path):
@@ -89,80 +98,14 @@ def get_data_npz(file_path):
         return data[data.files[0]]
     else:
         raise ValueError(f"The .npz file '{file_path}' contains multiple arrays: {data.files}. It must contain exactly one array.")
-    
-def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors, mobile_sensors):
-    """
-    - full_state_data: a nd numpy array with time on the last axis
-    - random_sensors: number of randomly placed stationary sensors (integer)
-    - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
-                        If multiple stationary sensors, put tuples in a list (tuple or list of tuples).
-    - mobile_sensors: coordinates (tuple) of a mobile sensor in a list (length of list should match number of timesteps in dataset).
-                        if multiple mobile_sensors, use a nested list. (list of tuples, or nested list of tuples)
-    Out:
-    dict:
-    {
-        "sensor_measurements": sensor_measurements,
-        "sensor_summary": sensor_summary,
-    }
-    where sensor_measurements is a 2D numpy array with time on axis 1
-    and sensor_summary is a pandas dataframe
-    """
-    sensor_summary = []
-    sensor_measurements = []
-
-    # generate random sensor locations
-    if random_sensors is not None:
-        if isinstance(random_sensors, int):
-            random_sensor_locations = generate_random_sensor_locations(full_state = full_state_data, num_sensors = random_sensors)
-            for sensor_coordinate in random_sensor_locations:
-                sensor_summary.append(['stationary (randomly selected)', sensor_coordinate])
-                sensor_measurements.append(full_state_data[sensor_coordinate])
-        else:
-            raise ValueError(f"Invalid `random_sensor`.")
-
-    # selected stationary sensors
-    if stationary_sensors is not None:
-        if isinstance(stationary_sensors, tuple):
-            stationary_sensors = [stationary_sensors]
-        if all(isinstance(sensor, tuple) for sensor in stationary_sensors):
-            for sensor_coordinate in stationary_sensors:
-                sensor_summary.append(['stationary (user selected)', sensor_coordinate])
-                sensor_measurements.append(full_state_data[sensor_coordinate])
-        else:
-            raise ValueError(f"Invalid `stationary_sensors`.")
-        
-    if mobile_sensors is not None:
-        if isinstance(mobile_sensors[0], tuple):
-            mobile_sensors = [mobile_sensors]
-        if isinstance(mobile_sensors[0], list):
-            for mobile_sensor_coordinates in mobile_sensors:
-                if len(mobile_sensor_coordinates) != full_state_data.shape[-1]:
-                    raise ValueError(
-                        f"Number of mobile sensor coordinates ({len(mobile_sensor_coordinates)}) "
-                        f"must match the number of timesteps ({full_state_data.shape[-1]})."
-                    )
-                sensor_summary.append(['mobile', mobile_sensor_coordinates])
-                sensor_measurements.append([
-                    full_state_data[sensor_coordinate][timestep]
-                    for timestep, sensor_coordinate in enumerate(mobile_sensor_coordinates)
-                ])
-        else:
-            raise ValueError(f"Invalid `mobile_sensors`.")
-    sensor_measurements = np.array(sensor_measurements)
-    sensor_summary = pd.DataFrame(sensor_summary, columns=["sensor type", "location/trajectory"])
-    return {
-        "sensor_measurements": sensor_measurements,
-        "sensor_summary": sensor_summary,
-    }
-
 
 def generate_random_sensor_locations(full_state, num_sensors):
     """
-    Input: a nd numpy array where the last axis is time and the number random sensor
+    Input: a nd numpy array where the first axis is time, and a int for number of random sensor
     locations to return.
     Return: a list of sensor locations (tuples)
     """
-    spatial_shape = full_state.shape[:-1] # last dimension always number of timesteps
+    spatial_shape = full_state.shape[1:] # first dimension is number of timesteps, rest is spatial dimentions
     spatial_points = np.prod(spatial_shape)
     sensor_indices = np.random.choice(spatial_points, size = num_sensors, replace = False)
     sensor_locations = []
@@ -177,7 +120,7 @@ def generate_random_sensor_locations(full_state, num_sensors):
 
 def generate_lagged_sequences(lags, full_state_data = None, random_sensors = None, stationary_sensors = None, mobile_sensors = None, sensor_measurements = None):
     """
-    - full_state_data: a nd numpy array with time on the last axis
+    - full_state_data: a nd numpy array with time on the first axis
     - random_sensors: number of randomly placed stationary sensors (integer)
     - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
                         If multiple stationary sensors, put tuples in a list (tuple or list of tuples).
@@ -203,7 +146,7 @@ def generate_lagged_sequences(lags, full_state_data = None, random_sensors = Non
 
 def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors, mobile_sensors):
     """
-    - full_state_data: a nd numpy array with time on the last axis
+    - full_state_data: a nd numpy array with time on the first axis (axis 0)
     - random_sensors: number of randomly placed stationary sensors (integer)
     - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
                         If multiple stationary sensors, put tuples in a list (tuple or list of tuples).
@@ -215,7 +158,7 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
         "sensor_measurements": sensor_measurements,
         "sensor_summary": sensor_summary,
     }
-    where sensor_measurements is a 2D numpy array with time on axis 1
+    where sensor_measurements is a 2D numpy array with time on axis 0
     and sensor_summary is a pandas dataframe
     """
     sensor_summary = []
@@ -227,7 +170,7 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
             random_sensor_locations = generate_random_sensor_locations(full_state = full_state_data, num_sensors = random_sensors)
             for sensor_coordinate in random_sensor_locations:
                 sensor_summary.append(['stationary (randomly selected)', sensor_coordinate])
-                sensor_measurements.append(full_state_data[sensor_coordinate])
+                sensor_measurements.append(full_state_data[(slice(None),) + sensor_coordinate]) # slice for time axis (all timesteps)
         else:
             raise ValueError(f"Invalid `random_sensor`.")
 
@@ -238,7 +181,7 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
         if all(isinstance(sensor, tuple) for sensor in stationary_sensors):
             for sensor_coordinate in stationary_sensors:
                 sensor_summary.append(['stationary (user selected)', sensor_coordinate])
-                sensor_measurements.append(full_state_data[sensor_coordinate])
+                sensor_measurements.append(full_state_data[(slice(None),) + sensor_coordinate])
         else:
             raise ValueError(f"Invalid `stationary_sensors`.")
         
@@ -247,19 +190,20 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
             mobile_sensors = [mobile_sensors]
         if isinstance(mobile_sensors[0], list):
             for mobile_sensor_coordinates in mobile_sensors:
-                if len(mobile_sensor_coordinates) != full_state_data.shape[-1]:
+                if len(mobile_sensor_coordinates) != full_state_data.shape[0]:
                     raise ValueError(
                         f"Number of mobile sensor coordinates ({len(mobile_sensor_coordinates)}) "
-                        f"must match the number of timesteps ({full_state_data.shape[-1]})."
+                        f"must match the number of timesteps ({full_state_data.shape[0]})."
                     )
                 sensor_summary.append(['mobile', mobile_sensor_coordinates])
                 sensor_measurements.append([
-                    full_state_data[sensor_coordinate][timestep]
+                    full_state_data[timestep][sensor_coordinate]
                     for timestep, sensor_coordinate in enumerate(mobile_sensor_coordinates)
                 ])
         else:
             raise ValueError(f"Invalid `mobile_sensors`.")
-    sensor_measurements = np.array(sensor_measurements)
+    # transpose sensor_measurements so time up on axis 0, number of sensors on axis 1
+    sensor_measurements = np.array(sensor_measurements).T
     sensor_summary = pd.DataFrame(sensor_summary, columns=["sensor type", "location/trajectory"])
     return {
         "sensor_measurements": sensor_measurements,
@@ -275,10 +219,9 @@ def generate_lagged_sequences_from_sensor_measurements(sensor_measurements, lags
     """
     num_timesteps = sensor_measurements.shape[0]
     num_sensors = sensor_measurements.shape[1]
-    if num_timesteps <= lags:
-        raise ValueError("Number of timesteps must be greater than the number of lags.")
-
-    lagged_sequences = np.empty((num_timesteps - lags, lags + 1, num_sensors))
+    # concatenate zeros padding at beginning of sensor data along axis 0
+    sensor_measurements = np.concatenate((np.zeros((lags, num_sensors)), sensor_measurements), axis = 0)
+    lagged_sequences = np.empty((num_timesteps, lags + 1, num_sensors))
     for i in range(lagged_sequences.shape[0]):
         lagged_sequences[i] = sensor_measurements[i:i+lags+1, :]
     return lagged_sequences
