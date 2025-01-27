@@ -1,29 +1,37 @@
 import matplotlib.pyplot as plt
 
 
-def forward_backward_walk(start, end, timesteps):
+def forward_backward_walk(start, end, timesteps, forward_first=True):
     """
-    Generates a list of indices that alternates back and forth from `start` to `end`
-    until the list reaches the specified `length`.
+    Generates a list of tuples where each tuple contains one integer,
+    alternating back and forth from `start` to `end` or `end` to `start`
+    based on the `forward_first` flag until the list reaches the specified `timesteps`.
 
     Args:
-        length (int): The desired length of the list.
         start (int): The starting value of the range.
         end (int): The ending value of the range.
+        timesteps (int): The desired length of the list.
+        forward_first (bool): If True, starts from `start` to `end` first. 
+                              If False, starts from `end` to `start`.
 
     Returns:
-        list: A list of alternating indices.
+        list: A list of tuples containing one integer each.
     """
     indices = []
     
     # Generate alternating indices as tuples until the required length is reached
     while len(indices) < timesteps:
-        indices += [(i,) for i in range(start, end + 1)]  # Forward direction
-        indices += [(i,) for i in range(end, start - 1, -1)]  # Backward direction
+        if forward_first:
+            indices += [(i,) for i in range(start, end + 1)]  # Forward direction
+            indices += [(i,) for i in range(end, start - 1, -1)]  # Backward direction
+        else:
+            indices += [(i,) for i in range(end-1, start, -1)]  # Backward direction
+            indices += [(i,) for i in range(start, end)]  # Forward direction
     
     # Truncate to the specified length
     indices = indices[:timesteps]
     return indices
+
 
 
 def perimeter_walk(height, width, timesteps, clockwise = True):

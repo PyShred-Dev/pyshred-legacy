@@ -154,6 +154,10 @@ class SHRED(nn.Module):
         else:
             raise ValueError("Invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
 
+        self._sensor_forecaster = None
+        self._reconstructor = None
+        self.recon_validation_errors = None
+        self.forecast_validation_errors = None
         # self._sequence_str = self._sequence_model.model_name # sequence model name
         # self._decoder_str = self._decoder_model.model_name # decoder model name       
         # self.sensor_summary = None # information about sensors (a pandas dataframe)
@@ -355,7 +359,11 @@ class SHRED(nn.Module):
                                         output_size = output_size, batch_size = batch_size, num_epochs = num_epochs,
                                         lr = lr, verbose = verbose, patience = patience)
         self._is_fitted = True
-        return self.recon_validation_errors, self.forecast_validation_errors
+        result = {
+            'Reconstructor Validation Errors':self.recon_validation_errors,
+            'Forecaster Validation Errors':self.forecast_validation_errors,
+        }
+        return result
 
     def predict(self, start, end, sensor_data = None, sensor_data_time = None):
         """

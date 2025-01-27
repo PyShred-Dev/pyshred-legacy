@@ -104,9 +104,9 @@ class ParametricSHREDDataProcessor:
         self.train_indices = train_indices
         self.val_indices = val_indices
         self.test_indices = test_indices
-        print('train indices', train_indices)
-        print('val_indices', val_indices)
-        print('test_indices', test_indices)
+        # print('train indices', train_indices)
+        # print('val_indices', val_indices)
+        # print('test_indices', test_indices)
 
         X_train, X_valid, X_test = None, None, None
         y_train, y_valid, y_test = None, None, None
@@ -134,7 +134,7 @@ class ParametricSHREDDataProcessor:
                 self.sensor_summary = sensor_measurements_dict['sensor_summary']
         
 
-        print('all_traj_sensor_measurements', all_traj_sensor_measurements.shape)
+        # print('all_traj_sensor_measurements', all_traj_sensor_measurements.shape)
         print('sensor summary', self.sensor_summary)
             # else:
             #     self.sensor_summary = pd.concat([self.sensor_summary, sensor_measurements_dict['sensor_summary']], 
@@ -160,8 +160,8 @@ class ParametricSHREDDataProcessor:
             flattened_test_traj_sensor_measurements_and_params = test_traj_sensor_measurements_and_params.reshape(
                 test_traj_sensor_measurements_and_params.shape[0] * test_traj_sensor_measurements_and_params.shape[1],
                 test_traj_sensor_measurements_and_params.shape[2])
-            print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
-            print('flattened_valid_traj_sensor_measurements_and_params:', flattened_valid_traj_sensor_measurements_and_params.shape)
+            # print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
+            # print('flattened_valid_traj_sensor_measurements_and_params:', flattened_valid_traj_sensor_measurements_and_params.shape)
             flattened_all_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params.reshape(
                 all_traj_sensor_measurements_and_params.shape[0] * all_traj_sensor_measurements_and_params.shape[1],
                 all_traj_sensor_measurements_and_params.shape[2])
@@ -169,13 +169,13 @@ class ParametricSHREDDataProcessor:
             # self.fit_sensors(self.data[i].shape[0], method) # use all time indices of train trajectories
             # self.fit_sensors(len(self.time), method) # use all time indices of train trajectories
             self.fit_sensors(flattened_train_traj_sensor_measurements_and_params)
-            print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
+            # print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
             # transform
             transformed_flattened_train_traj_sensor_measurements_and_params, transformed_flattened_valid_traj_sensor_measurements_and_params,transformed_flattened_test_traj_sensor_measurements_and_params = \
             self.transform_sensor(flattened_train_traj_sensor_measurements_and_params, flattened_valid_traj_sensor_measurements_and_params,
                                                         flattened_test_traj_sensor_measurements_and_params)
-            print('transformed_flattened_train_traj_sensor_measurements_and_params:', transformed_flattened_train_traj_sensor_measurements_and_params.shape)
-            print('ntimes', self.ntimes)
+            # print('transformed_flattened_train_traj_sensor_measurements_and_params:', transformed_flattened_train_traj_sensor_measurements_and_params.shape)
+            # print('ntimes', self.ntimes)
             # reshape back to (n_traj, n_time, n_sensors + n_params) to simply lag generating process
             transformed_train_traj_sensor_measurements_and_params = transformed_flattened_train_traj_sensor_measurements_and_params.reshape(
                 int(transformed_flattened_train_traj_sensor_measurements_and_params.shape[0]/self.ntimes), self.ntimes, self.nsensors + self.nparams)
@@ -189,9 +189,9 @@ class ParametricSHREDDataProcessor:
     
         # parametric case
 
-        print('X_train:', X_train.shape)
-        print('X_valid:', X_valid.shape)
-        print('X_test:', X_test.shape)
+        # print('X_train:', X_train.shape)
+        # print('X_valid:', X_valid.shape)
+        # print('X_test:', X_test.shape)
         
         # Processing regarding Y
         # flattens full state data into into 2D array with time along axis 0.
@@ -294,7 +294,7 @@ class ParametricSHREDDataProcessor:
             self.scaler_before_svd = sc
             train_data_std_scaled = sc.transform(train_data)
             # rSVD
-            print('train_data_std_scaled.shape should be ntimes * ntraj * train_size',train_data_std_scaled.shape)
+            # print('train_data_std_scaled.shape should be ntimes * ntraj * train_size',train_data_std_scaled.shape)
             U, S, V = randomized_svd(train_data_std_scaled, n_components=self.n_components, n_iter='auto')
 
             # TODO fit compression
