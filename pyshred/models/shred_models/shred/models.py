@@ -20,7 +20,6 @@ from ...decoder_models import *
 from ...sequence_models import *
 from ..forecaster.forecaster import FORECASTER
 from ..reconstructor.reconstructor import RECONSTRUCTOR
-
 # from sdn_module import SDNModule
 # from lstm_module import LSTMModule
 # from app.pyshred.models.decoder_models.sdn.sdn import *
@@ -130,7 +129,6 @@ class SHRED(nn.Module):
         decoder : str or AbstractDecoder
             The decoder model to use. Either a string ('SDN', etc.) or an instance of a decoder model.
         """
-        print('Newest Version')
         super().__init__()
         # Initialize Sequence Model
         if isinstance(sequence, AbstractSequence):
@@ -179,93 +177,6 @@ class SHRED(nn.Module):
         # self._data_keys = None # list of keys in 'data' dictionary
         # self._data_spatial_shape = None # spatial shape (all dimensions except the last) of each array in the 'data' dictionary
     
-    def forward(self, x):
-        print("Newest Version")
-        return self._reconstructor(x)
-        # Check if fit() method has been called prior
-        # if not self._is_fitted:
-        #     raise RuntimeError("The SHRED model must be fit before calling recon().")
-        # ########################################## VALIDATE USER INPUT ############################################
-        # time_step = self._time[1] - self._time[0]
-        # if not isinstance(start, (int, np.integer)):
-        #     raise TypeError(f"Expected 'start' to be an integer, but got {type(start).__name__}.")
-        # if not isinstance(end, (int, np.integer)):
-        #     raise TypeError(f"Expected 'end' to be an integer, but got {type(start).__name__}.")
-        # start_time = start # inclusive start time
-        # end_time = end # inclusive end time
-        # # Check if start time less than or equal to end time
-        # if start_time > end_time:
-        #     raise ValueError(f"Start time ({start_time}) must be less than or equal to end time ({end_time}).")
-        # # Check if start time is greater than train data start time + lag time
-        # if start_time < self._time[0] + (self._lags * time_step):
-        #     raise ValueError(f"Start time must be greater or equal to {self._time[0] + (self._lags * time_step)}")
-        # # Check if start time is valid 
-        # if (start_time - self._time[0])%time_step != 0:
-        #     raise ValueError(f"Start time ({start_time}) is invalid.")
-        # # Check if end time is valid 
-        # if (end_time - self._time[0])%time_step != 0:
-        #     raise ValueError(f"End time ({end_time}) is invalid.")
-        # if sensor_data is not None:
-        #     # Check if time exists
-        #     if sensor_data_time is None:
-        #         raise ValueError("The 'sensor_data_time' corresponding to 'sensor_data' does not exist.")
-        #     # Check if sensor_data same timesteps as time
-        #     if sensor_data.shape[1] != sensor_data_time.shape[0]:
-        #         raise ValueError(f"The number of columns in 'sensor_data' ({sensor_data.shape[1]}) must match length of 'time' ({sensor_data_time.shape[0]}).")
-        #     # Check for expected number of sensors in sensor_data
-        #     if sensor_data.shape[0] != self.sensor_data.shape[0]:
-        #         raise ValueError(f"Expected {self.sensor_data.shape[0]} sensors but got {sensor_data.shape[0]} in 'sensor_data'.")
-        #     if np.any(sensor_data_time % time_step != 0):
-        #         raise ValueError(f"All values in 'time' must be multiples of {time_step}")
-        #     if np.any(sensor_data_time <= self._time[-1]):
-        #         print(f"Warning: Some values in 'time' are less than {self._time[-1]}. Any 'sensor_data' value with a corresponding 'time' value less than {self._time[-1]} will be ignored.")
-        #     # Scale input sensor data
-        #     scaled_sensor_data_in = self._scale_sensor_data(sensor_data)
-        # if start_time <= self._time[-1]:
-        #     start_time_index = np.where(self._time == start_time)[0][0]
-        # else:
-        #     start_time_index = (len(self._time) - 1) + int((start_time - self._time[-1])/time_step)
-        # end_time_index = int((end_time - start_time) / time_step) + start_time_index
-        # scaled_sensor_data = self._scale_sensor_data(self.sensor_data)
-        # if end_time_index < len(self._time): # If we don't need forecast at all (ignore argument time and sensor_data)
-        #     sensor_measurements_scaled = scaled_sensor_data[:,start_time_index - self._lags : end_time_index + 1] # +1 to be inclusive of endpoint, timesteps as columns
-        # else: # Forecasting is necessary
-        #     if start_time_index < len(self._time):
-        #         sensor_measurements_scaled = scaled_sensor_data[:,start_time_index - self._lags:].T
-        #     else:
-        #         sensor_measurements_scaled = scaled_sensor_data[:,-self._lags:].T # get last lag_index number of timesteps, timesteps represented by rows
-        #     n_forecasts = end_time_index - (len(self._time) - 1)
-        #     initial_in = sensor_measurements_scaled
-        #     device = 'cuda' if next(self._sensor_forecaster.parameters()).is_cuda else 'cpu'
-        #     initial_in = torch.tensor(initial_in, dtype=torch.float32).to(device).unsqueeze(0) # add a dimension 
-        #     vals = []
-        #     # append initial sensor data (not forecasted sensor data) to vals
-        #     for i in range(0, initial_in[0].shape[0]):
-        #         vals.append(initial_in[0, i,:].detach().cpu().clone().numpy())
-        #     num_sensors = self.sensor_data.shape[0]
-        #     time_index_list = np.array([]) # initialize time_index_list
-        #     for i in range(n_forecasts):
-        #         if sensor_data is not None:
-        #             i_time = self._time[-1] + (i+1)*time_step
-        #             time_index_list = np.where(sensor_data_time == i_time)[0]
-        #         if time_index_list.size > 0: # i_time exists in 'time'
-        #             time_index = time_index_list[0]
-        #             scaled_sensor_forecast = scaled_sensor_data_in[:,time_index]
-        #         else: # i_time does not exist in 'time'
-        #             scaled_sensor_forecast = self._sensor_forecaster(initial_in).detach().cpu().numpy()
-        #         vals.append(scaled_sensor_forecast.reshape(num_sensors))
-        #         temp = initial_in.clone()
-        #         initial_in[0,:-1] = temp[0,1:]
-        #         initial_in[0,-1] = torch.tensor(scaled_sensor_forecast)
-        #     device = 'cuda' if next(self._reconstructor.parameters()).is_cuda else 'cpu'
-        #     sensor_measurements_scaled_all = np.array(vals).T # timesteps as columns
-        #     sensor_measurements_scaled = sensor_measurements_scaled_all[:,-(end_time_index - start_time_index) - self._lags - 1:]
-        # sensor_measurements_unscaled_recon = self._unscale_sensor_data(sensor_measurements_scaled)
-        # # Get reconstructions
-        # recon_dict = self.recon(sensor_measurments = sensor_measurements_unscaled_recon)
-        # return ReconstructionResult(recon_dict=recon_dict, sensor_measurements=sensor_measurements_unscaled_recon, time= np.arange(start_time, end_time + time_step, time_step))
-
-
     def fit(self, train_set, valid_set,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
         """
         Train SHRED using the high-dimensional state space data.

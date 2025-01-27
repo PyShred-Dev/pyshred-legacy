@@ -8,7 +8,6 @@ class LSTM(AbstractSequence):
 
     def __init__(self, hidden_size:int =64, num_layers:int =2):
         super().__init__()
-        print('looking good')
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = None # lazy initialization

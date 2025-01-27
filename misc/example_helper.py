@@ -1,5 +1,31 @@
 import matplotlib.pyplot as plt
 
+
+def forward_backward_walk(start, end, timesteps):
+    """
+    Generates a list of indices that alternates back and forth from `start` to `end`
+    until the list reaches the specified `length`.
+
+    Args:
+        length (int): The desired length of the list.
+        start (int): The starting value of the range.
+        end (int): The ending value of the range.
+
+    Returns:
+        list: A list of alternating indices.
+    """
+    indices = []
+    
+    # Generate alternating indices as tuples until the required length is reached
+    while len(indices) < timesteps:
+        indices += [(i,) for i in range(start, end + 1)]  # Forward direction
+        indices += [(i,) for i in range(end, start - 1, -1)]  # Backward direction
+    
+    # Truncate to the specified length
+    indices = indices[:timesteps]
+    return indices
+
+
 def perimeter_walk(height, width, timesteps, clockwise = True):
     # Initialize the grid and starting position
     x, y = 0, 0  # Start at the top-left corner

@@ -3,17 +3,23 @@ import pandas as pd
 import torch.nn as nn
 from sklearn.utils.extmath import randomized_svd
 import numpy as np
-from tqdm import tqdm
+# from tqdm import tqdm
 from torch.utils.data import DataLoader
 import pickle
 from .process_data import *
 from .reconstruction_result import *
-from .abstract_shred import AbstractSHRED
-from ..sequence_models.abstract_sequence import AbstractSequence
-from ..sequence_models.lstm_model import LSTM
-from ..sequence_models.transformer_model import Transformer
-from ..decoder_models.sdn_model import SDN
-from ..decoder_models.abstract_decoder import AbstractDecoder
+# from .abstract_shred import AbstractSHRED
+from ...sequence_models.abstract_sequence import AbstractSequence
+from ...decoder_models.abstract_decoder import AbstractDecoder
+# from ..sequence_models.abstract_sequence import AbstractSequence
+# from ..sequence_models.lstm_model import LSTM
+# from ..sequence_models.transformer_model import Transformer
+# from ..decoder_models.sdn_model import SDN
+# from ..decoder_models.abstract_decoder import AbstractDecoder
+from ...decoder_models import *
+from ...sequence_models import *
+from ..forecaster.forecaster import FORECASTER
+from ..reconstructor.reconstructor import RECONSTRUCTOR
 # from sdn_module import SDNModule
 # from lstm_module import LSTMModule
 # from app.pyshred.models.decoder_models.sdn.sdn import *
@@ -21,10 +27,18 @@ from ..decoder_models.abstract_decoder import AbstractDecoder
 # from process_data import *
 # from reconstruction_result import *
 
+# model registry
+SEQUENCE_MODELS = {
+    "LSTM": LSTM,
+    "TRANSFORMER": Transformer
+}
+
+DECODER_MODELS = {
+    "SDN": SDN
+}
 
 
-
-class SHRED(AbstractSHRED):
+class SHRED(nn.Module):
     """
     SHallow REcurrent Decoder (SHRED) neural network architecture. SHRED learns a mapping from
     trajectories of sensor measurements to high-dimensional, spatio-temporal states.
@@ -103,16 +117,6 @@ class SHRED(AbstractSHRED):
 
     """
 
-    # Dictionary for mapping strings to sequence models
-    SEQUENCE_MODELS = {
-        "LSTM": LSTM,
-        "TRANSFORMER": Transformer
-    }
-
-    # Dictionary for mapping strings to sequence models
-    DECODER_MODELS = {
-        "SDN": SDN
-    }
 
     def __init__(self, sequence = 'LSTM', decoder = 'SDN'):
         """
@@ -126,15 +130,14 @@ class SHRED(AbstractSHRED):
             The decoder model to use. Either a string ('SDN', etc.) or an instance of a decoder model.
         """
         super().__init__()
-
         # Initialize Sequence Model
         if isinstance(sequence, AbstractSequence):
             self._sequence_model = sequence
         elif isinstance(sequence, str):
             sequence = sequence.upper()
-            if sequence not in self.SEQUENCE_MODELS:
-                raise ValueError(f"Invalid sequence model: {sequence}. Choose from: {list(self.SEQUENCE_MODELS.keys())}")
-            self._sequence_model = self.SEQUENCE_MODELS[sequence]()
+            if sequence not in SEQUENCE_MODELS:
+                raise ValueError(f"Invalid sequence model: {sequence}. Choose from: {list(SEQUENCE_MODELS.keys())}")
+            self._sequence_model = SEQUENCE_MODELS[sequence]()
         else:
             raise ValueError("Invalid type for 'sequence'. Must be str or an AbstractSequence instance.")
 
@@ -143,38 +146,38 @@ class SHRED(AbstractSHRED):
             self._decoder_model = decoder
         elif isinstance(decoder, str):
             decoder = decoder.upper()
-            if decoder not in self.DECODER_MODELS:
-                raise ValueError(f"Invalid decoder model: {decoder}. Choose from: {list(self.DECODER_MODELS.keys())}")
-            self._decoder_model = self.DECODER_MODELS[decoder]()
+            if decoder not in DECODER_MODELS:
+                raise ValueError(f"Invalid decoder model: {decoder}. Choose from: {list(DECODER_MODELS.keys())}")
+            self._decoder_model = DECODER_MODELS[decoder]()
         else:
             raise ValueError("Invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
 
-        self._sequence_str = self._sequence_model.model_name # sequence model name
-        self._decoder_str = self._decoder_model.model_name # decoder model name       
-        self.sensor_summary = None # information about sensors (a pandas dataframe)
-        self.sensor_data = None # raw sensor data, sensors as rows, timesteps as columns
-        self.recon_validation_errors = None
-        self.forecast_validation_errors = None
-        self._reconstructor = None
-        self._sensor_forecaster = None
-        self._sc_sensors = None
-        self._sc_data = None
-        self._lag_index = None
-        self._data_scalers = None
-        self._n_components = None
-        self._is_fitted = False
-        self._sc_sensor_dict = {}
-        self._sc_data_dict = {}
-        self._u_dict = {}
-        self._s_dict = {}
-        self._v_dict = {}
-        self._time = None # time array
-        self._compressed = None # boolean for SVD compression
-        self._lags = None # lags (number of frames to look back)
-        self._data_keys = None # list of keys in 'data' dictionary
-        self._data_spatial_shape = None # spatial shape (all dimensions except the last) of each array in the 'data' dictionary
+        # self._sequence_str = self._sequence_model.model_name # sequence model name
+        # self._decoder_str = self._decoder_model.model_name # decoder model name       
+        # self.sensor_summary = None # information about sensors (a pandas dataframe)
+        # self.sensor_data = None # raw sensor data, sensors as rows, timesteps as columns
+        # self.recon_validation_errors = None
+        # self.forecast_validation_errors = None
+        # self._reconstructor = None
+        # self._sensor_forecaster = None
+        # self._sc_sensors = None
+        # self._sc_data = None
+        # self._lag_index = None
+        # self._data_scalers = None
+        # self._n_components = None
+        # self._is_fitted = False
+        # self._sc_sensor_dict = {}
+        # self._sc_data_dict = {}
+        # self._u_dict = {}
+        # self._s_dict = {}
+        # self._v_dict = {}
+        # self._time = None # time array
+        # self._compressed = None # boolean for SVD compression
+        # self._lags = None # lags (number of frames to look back)
+        # self._data_keys = None # list of keys in 'data' dictionary
+        # self._data_spatial_shape = None # spatial shape (all dimensions except the last) of each array in the 'data' dictionary
     
-    def fit(self, data, sensors, lags = 40, time = None, sensor_forecaster = True, n_components = 20, val_size = 0.2, batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
+    def fit(self, train_set, valid_set,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -233,180 +236,34 @@ class SHRED(AbstractSHRED):
         patience : int, optional
             Number of epochs to wait for improvement before early stopping. Default is 20.
         """
-        
-        ###################################### Validate User Input ###################################################
-        if isinstance(data, str):
-            with open(data, 'rb') as file:
-                loaded_pickle = pickle.load(file)
-                data = loaded_pickle
-        if isinstance(sensors, str):
-            with open(sensors, 'rb') as file:
-                loaded_pickle = pickle.load(file)
-                sensors = loaded_pickle
-        # Check if 'data' argument is a dictionary
-        if not isinstance(data, dict):
-            raise TypeError(f"'data' must be a dictionary, but got {type(data).__name__}.")
-        # Check if 'sensors' argument is a dictionary
-        if not isinstance(sensors, dict):
-            raise TypeError(f"'sensors' must be a dictionary, but got {type(sensors).__name__}.")
-        # Check to make sure 'data' dictionary does not include reserved key 'sensors' 
-        if any("sensors" in key for key in data.keys()):
-            raise ValueError("The key 'sensors' is reserved and cannot be used in the 'data' dictionary.")
-        # Check all arrays have the same size in the last dimension (number of timesteps)
-        if len({arr.shape[-1] for arr in data.values()}) != 1:
-            raise ValueError("The last dimension (number of timesteps) of each array in 'data' must be the same.")
-        # Time argument is not None.
-        if time is not None:
-            # Check if time argument is a 1D numpy array
-            if not isinstance(time, np.ndarray) or time.ndim != 1:
-                raise ValueError("'time' must be a 1-dimensional numpy array.")
-            # Check if time array is equally spaced
-            if not np.all(np.equal(np.diff(time), np.diff(time)[0])):
-                raise ValueError("'time' must contain equally spaced elements.")
-            if not np.all(np.diff(time) > 0):
-                raise ValueError("'time' must be in strictly increasing order.")
-            # Check if length of time array matches the last dimension of data array
-            if any(arr.shape[-1] != time.shape[0] for arr in data.values()):
-                raise ValueError("The length of 'time' must match the last dimension (number of timesteps) of arrays in 'data'.")
-        # Time argument is None.
-        else:
-            # Set time argument to span from 0 to size of the last dimension (number of timesteps) - 1
-            time = np.arange(0, next(iter(data.values())).shape[-1], 1)
-        ############################################ SET ATTRIBUTES ###################################################
-        self._time = time # time array
-        self._n_components = n_components
-        if n_components is not None:
-            self._compressed = True
-        else:
-            self._compressed = False
-        self._lags = lags # lags (number of frames to look back)
-        self._data_keys = list(data.keys()) # list of keys in 'data' dictionary
-        self._data_spatial_shape = {key: arr.shape[:-1] for key, arr in data.items()} # store the spatial shape (all dimensions except the last) of each array in the 'data' dictionary
-        
-        ########################################### FLATTEN TO 2D #################################################
-        # Flatten each n-dimensional array to 2D, with timesteps as the columns
-        data = {key: arr.reshape(-1, arr.shape[-1]) for key, arr in data.items()}
-        
-        ################################# GENERATE TRAIN & VALIDATION INDICES #######################################
-        train_indices_reconstructor, valid_indices_reconstructor = generate_train_val_indices_reconstructor(num_timesteps = self._time.shape[0], lags = self._lags, val_size = val_size)
-        train_indices_forecaster, valid_indices_forecaster = generate_train_val_indices_forecaster(num_timesteps = self._time.shape[0], lags = self._lags, val_size = val_size)
-        
-        ########################################### SENSORS PROCESSING #################################################
-        all_sensor_data = None
-        sensor_summary = []
-        sensor_column_order = 0
-        for key, sensor in sensors.items():
-            spatial_shape = self._data_spatial_shape.get(key) # spatial shape of cooresponding array in 'data'
-            # Handle stationary sensors
-            if isinstance(sensor, int) or isinstance(sensor[0], tuple):
-                # If 'sensor' is an integer, randomly select that many unique sensor locations
-                if isinstance(sensor, int):
-                    row_dim = np.prod(spatial_shape) # size of flattened spatial dimension
-                    sensor_indices = np.random.choice(row_dim, size = sensor, replace=False)
-                    for sensor_index in sensor_indices:
-                        sensor_summary.append([sensor_column_order, key, 'stationary', index_to_coord(index = sensor_index, spatial_shape=spatial_shape)])
-                        sensor_column_order+=1
-                # If 'sensor' is a list of tuples/coordinates
-                elif isinstance(sensor[0], tuple):
-                    sensor_indices = []
-                    for coord in sensor:
-                        sensor_indices.append(coord_to_index(coord = coord, spatial_shape=spatial_shape))
-                        sensor_summary.append([sensor_column_order, key, 'stationary', coord])
-                        sensor_column_order+=1
-                    sensor_indices = np.array(sensor_indices)
-                sensor_data = data.get(key)[sensor_indices,:].T  # timesteps as rows
-                if sensor_data.ndim == 1: # if 1D reshape to 2D
-                    sensor_data.reshape(-1,1) # timesteps as rows
-            # Handles mobile sensors:
-            elif isinstance(sensor[0], list):
-                mobile_sensor_data = None
-                for mobile_sensor in sensor: # a single mobile sensor is a list of tuples/coordinates
-                    # Check if length of mobile sensor measurments match the number of timesteps
-                    if len(mobile_sensor) != self._time.shape[0]:
-                        raise ValueError(f"The length of mobile sensor measurements must match the number of timesteps ({self._time.shape[0]}).")
-                    sensor_indices = []
-                    for coord in mobile_sensor:
-                        sensor_indices.append(coord_to_index(coord = coord, spatial_shape=spatial_shape))
-                    sensor_indices = np.array(sensor_indices)
-                    sensor_data = data.get(key)[sensor_indices, np.arange(self._time.shape[0])].T # technically transpose not necessary since 1D array
-                    sensor_data = sensor_data.reshape(-1,1) # reshape from 1D to 2D array with timesteps as rows
-                    sensor_summary.append([sensor_column_order, key, 'mobile', mobile_sensor])
-                    sensor_column_order+=1
-                    if mobile_sensor_data is None:
-                        mobile_sensor_data = sensor_data
-                    else:
-                        mobile_sensor_data = np.hstack((mobile_sensor_data, sensor_data))
-                sensor_data = mobile_sensor_data
-            sc = MinMaxScaler()
-            self._sc_sensor_dict[key] = sc.fit(sensor_data[train_indices_reconstructor,:])
-            sensor_data = sc.transform(sensor_data)
-            if all_sensor_data is None:
-                all_sensor_data = sensor_data
-            else:
-                all_sensor_data = np.hstack((all_sensor_data, sensor_data))
-        sensor_summary_col_names = ["row index", "dataset", "type", "location/trajectory"]
-        self.sensor_summary = pd.DataFrame(sensor_summary, columns=sensor_summary_col_names) # sensor location summary
-        self.sensor_data = self._unscale_sensor_data(all_sensor_data.T)
-        num_sensors = all_sensor_data.shape[1]
-
-        ############################################## COMPRESSION #################################################
-        # If 'compressed' is True, compress data using Randomized SVD.
-        if self._compressed:
-            print("Compressing Data...")
-
-            for key, arr in data.items():
-                arr = arr - np.mean(arr, axis=0)  # Center the data (mean-normalize along the columns)
-                u, s, v = randomized_svd(arr, n_components=n_components, n_iter='auto')
-                self._u_dict[key] = u
-                self._s_dict[key] = s
-                self._v_dict[key] = v
-        print("Done.")
-        
-        ############################################ FIT SCALERS AND TRANSFORM INPUT #####################################
-        scaled_data = self._v_dict if self._compressed else data
-        # Transform scaled_data to have timesteps as rows
-        for key in scaled_data:
-            scaled_data[key] = scaled_data[key].T
-        # Scaler fit on data with timesteps as rows
-        for key, arr in scaled_data.items():
-            sc = MinMaxScaler()
-            self._sc_data_dict[key] = sc.fit(arr[train_indices_reconstructor])
-            scaled_data[key] = sc.transform(arr)
-        
-        ############################################ DATA FOR SHRED #######################################################
-        load_X = np.hstack(list(scaled_data.values())) # Stack the scaled data horizontally with timesteps as rows
-        load_X = np.hstack((all_sensor_data, load_X)) # Stack scaled sensor data with scaled data, with timesteps as rows
-        output_size = load_X.shape[1]
-        
         ########################################### SHRED RECONSTRUCTOR #################################################
-        train_dataset, valid_dataset = generate_train_val_dataset_reconstructor(load_X = load_X, train_indices = train_indices_reconstructor,
-                                                                                valid_indices=valid_indices_reconstructor, lags = self._lags,
-                                                                                num_sensors = num_sensors)
-
-
-        self._sequence_model.initialize(num_sensors)
-        self._decoder_model.initialize(self._sequence_model.output_size, output_size)
-
-        self._reconstructor = _SHRED(sequence=self._sequence_model,decoder=self._decoder_model)
+        recon_train_set = train_set.reconstructor
+        recon_valid_set = valid_set.reconstructor
+        input_size = recon_train_set.X.shape[2] # nsensors + nparams
+        output_size = recon_train_set.Y.shape[1]
+        self._sequence_model.initialize(input_size) # initialize with nsensors
+        self._decoder_model.initialize(self._sequence_model.output_size, output_size) # could pass in entire sequence model
+        self._reconstructor = RECONSTRUCTOR(sequence=self._sequence_model,decoder=self._decoder_model)
         print("\nFitting Reconstructor...")
-        self.recon_validation_errors = self._reconstructor.fit(model = self._reconstructor, train_dataset = train_dataset, valid_dataset = valid_dataset, num_sensors = num_sensors, output_size = output_size
+        self.recon_validation_errors = self._reconstructor.fit(model = self._reconstructor, train_dataset = recon_train_set, valid_dataset = recon_valid_set, num_sensors = input_size, output_size = output_size
                                 , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
         
         ########################################### SHRED FORECASTER ####################################################
-        if sensor_forecaster:
-            train_dataset, valid_dataset = generate_train_val_dataset_sensor_forecaster(load_X = load_X, train_indices = train_indices_forecaster,
-                                                                        valid_indices=valid_indices_forecaster, lags= self._lags,
-                                                                        num_sensors = num_sensors)
+        if train_set.forecaster is not None:
+            forecast_train_set = train_set.forecaster
+            forecast_valid_set = valid_set.forecaster
+            input_size = forecast_train_set.X.shape[2] # nsensors + nparams
+            output_size = forecast_train_set.Y.shape[1]
+            print('input_size', input_size)
+            print('output_size', output_size)
+            self._sequence_model.initialize(input_size)
+            self._decoder_model.initialize(self._sequence_model.output_size, output_size)
             
-            #################
-            self._sequence_model.initialize(num_sensors)
-            self._decoder_model.initialize(self._sequence_model.output_size, num_sensors)
-            
-            self._sensor_forecaster = _SHRED(sequence=self._sequence_model,decoder=self._decoder_model)
+            self._sensor_forecaster = FORECASTER(sequence=self._sequence_model,decoder=self._decoder_model)
             # self._sensor_forecaster = _SHRED_FORECASTER(model=LSTM without decoder)
             print("\nFitting Forecaster...")
-            self.forecast_validation_errors =  self._sensor_forecaster.fit(model = self._sensor_forecaster, train_dataset = train_dataset, valid_dataset = valid_dataset, num_sensors = num_sensors,
-                                        output_size = num_sensors, batch_size = batch_size, num_epochs = num_epochs,
+            self.forecast_validation_errors =  self._sensor_forecaster.fit(model = self._sensor_forecaster, train_dataset = forecast_train_set, valid_dataset = forecast_valid_set, num_sensors = input_size,
+                                        output_size = output_size, batch_size = batch_size, num_epochs = num_epochs,
                                         lr = lr, verbose = verbose, patience = patience)
         self._is_fitted = True
         return self.recon_validation_errors, self.forecast_validation_errors
@@ -618,3 +475,142 @@ class SHRED(AbstractSHRED):
             indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
             unscaled_sensor_data[indices] = sc.inverse_transform(scaled_sensor_data[indices].T).T
         return unscaled_sensor_data
+
+
+# # class _SHRED_RECONSTRUCTOR(nn.Module):
+# class _SHRED(nn.Module):
+#     """
+#     The SHallow REcurrent Decoder (SHRED) Neural Network.
+    
+#     SHRED learns a mapping from trajectories of sensor measurements to a high-dimensional, spatio-temporal state.
+
+#     Attributes:
+#     -----------
+#     sequence : str, optional
+#         The sequence model used in SHRED (optional).
+#         Choose from:
+#             * 'LSTM': Long-short term memory model (default)
+#     decoder : str, optional
+#         The decoder model used in SHRED (optional).
+#         Choose from:
+#             * 'SDN': Shallow decoder model (default)
+    
+#     Methods:
+#     --------
+#     fit(data, sensors = 3, compressed = True, batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=5):
+#         Train SHRED using the high-dimensional state space data.
+    
+#     recon(sensors):
+#         Reconstruct the high-dimensional state space from the provided sensor measurements.
+
+#     forecast(n):
+#         Forecast the high-dimensional state space for `n` timesteps into the future.
+
+#     """
+
+#     def __init__(self, sequence, decoder):
+#         """
+#         Initialize SHRED with sequence model and decoder model.
+#         """
+#         super().__init__()
+#         self._sequence_str = sequence.model_name
+#         self._sequence_model = sequence
+#         self._decoder_str = decoder.model_name
+#         self._decoder_model = decoder
+#         self._best_L2_error = None
+
+#     def forward(self, x):
+#         h_out = self._sequence_model(x)
+#         output = self._decoder_model(h_out)
+#         return output
+    
+#     def fit(self,model, train_dataset, valid_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
+#         """
+#         Train SHRED using the high-dimensional state space data.
+
+#         Parameters:
+#         -----------
+#         batch_size : int, optional
+#             Number of samples per batch for training. Default is 64.
+
+#         num_epochs : int, optional
+#             Number of epochs for training the model. Default is 4000.
+
+#         lr : float, optional
+#             Learning rate for the optimizer. Default is 1e-3.
+
+#         verbose : bool, optional
+#             If True, prints progress during training. Default is True.
+
+#         patience : int, optional
+#             Number of epochs to wait for improvement before early stopping. Default is 5.
+        
+#         """        
+#         ########################################### CONFIGURE SHRED MODEL ###############################################
+#         # self._sequence_model = self.SEQUENCE_MODELS[self._sequence_str](input_size = num_sensors)
+#         # sequence_out_size = self._sequence_model.hidden_size # hidden/latent size (output size of sequence model)
+#         # self._decoder_model = self.DECODER_MODELS[self._decoder_str](input_size=sequence_out_size, output_size=output_size)
+#         ############################################ SHRED TRAINING #####################################################
+#         train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
+#         criterion = torch.nn.MSELoss()
+#         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+#         val_error_list = []
+#         patience_counter = 0
+#         best_params = model.state_dict()
+#         for epoch in range(1, num_epochs + 1):
+#             model.train()
+#             running_loss = 0.0
+#             running_error = 0.0
+#             if verbose:
+#                 pbar = tqdm(total=len(train_loader), desc=f'Epoch {epoch}/{num_epochs}', unit='batch')
+#             for inputs, target in train_loader:
+#                 outputs = model(inputs)
+#                 optimizer.zero_grad()
+#                 loss = criterion(outputs, target)
+#                 loss.backward()
+#                 optimizer.step()
+#                 running_loss += loss.item()
+#                 train_error = torch.linalg.norm(outputs - target) / torch.linalg.norm(target)
+#                 running_error += train_error.item()
+
+#                 if verbose:
+#                     pbar.set_postfix({
+#                         'loss': running_loss / (pbar.n + 1),  # Average train loss
+#                         'L2': running_error / (pbar.n + 1)  # Average train error
+#                     })
+#                     pbar.update(1)
+
+#             model.eval()
+#             with torch.no_grad():
+#                 val_outputs = model(valid_dataset.X)
+#                 val_loss = criterion(val_outputs, valid_dataset.Y).item()
+#                 val_error = torch.linalg.norm(val_outputs - valid_dataset.Y) / torch.linalg.norm(valid_dataset.Y)
+#                 val_error = val_error.item()
+#                 val_error_list.append(val_error)
+
+#             if verbose:
+#                 pbar.set_postfix({
+#                     'loss': running_loss / len(train_loader),
+#                     'L2': running_error / len(train_loader),
+#                     'val_loss': val_loss,
+#                     'val_L2': val_error
+#                 })
+#                 pbar.close()
+
+#             if patience is not None:
+#                 if val_error == torch.min(torch.tensor(val_error_list)):
+#                     patience_counter = 0
+#                     self._best_L2_error = val_error
+#                     best_params = model.state_dict()
+#                 else:
+#                     patience_counter += 1
+#                 if patience_counter == patience:
+#                     print("Early stopping triggered: patience threshold reached.")
+#                     model.load_state_dict(best_params)
+#                     return torch.tensor(val_error_list).cpu()
+        
+#         if patience is None:
+#             self._best_L2_error = val_error
+
+#         model.load_state_dict(best_params)
+#         return torch.tensor(val_error_list).detach().cpu().numpy()

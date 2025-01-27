@@ -84,7 +84,8 @@ class SHREDDataProcessor:
             # generate y data
             y_train, y_valid, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
             self.full_state_data = self.unflatten(self.full_state_data)
-        elif method == 'sequential':
+        # get forecaster data if sensor measurements exist
+        elif method == 'sequential' and self.sensor_measurements.size != 0:
             y_train, y_valid, y_test = self.generate_y_forecaster(X_train, X_valid, X_test)
             # remove final timestep of X since no y (next sensor measurement) exists for the final timestep
             X_train = X_train[:-1, :, :]

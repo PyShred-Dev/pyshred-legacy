@@ -148,6 +148,7 @@ class ParametricSHREDDataProcessor:
             train_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[train_indices]
             valid_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[val_indices]
             test_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[test_indices]
+            print(train_traj_sensor_measurements_and_params.shape[2])
             flattened_train_traj_sensor_measurements_and_params = train_traj_sensor_measurements_and_params.reshape(
                 train_traj_sensor_measurements_and_params.shape[0] * train_traj_sensor_measurements_and_params.shape[1],
                 train_traj_sensor_measurements_and_params.shape[2])
@@ -159,7 +160,7 @@ class ParametricSHREDDataProcessor:
             flattened_test_traj_sensor_measurements_and_params = test_traj_sensor_measurements_and_params.reshape(
                 test_traj_sensor_measurements_and_params.shape[0] * test_traj_sensor_measurements_and_params.shape[1],
                 test_traj_sensor_measurements_and_params.shape[2])
-
+            print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
             print('flattened_valid_traj_sensor_measurements_and_params:', flattened_valid_traj_sensor_measurements_and_params.shape)
             flattened_all_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params.reshape(
                 all_traj_sensor_measurements_and_params.shape[0] * all_traj_sensor_measurements_and_params.shape[1],
@@ -168,11 +169,13 @@ class ParametricSHREDDataProcessor:
             # self.fit_sensors(self.data[i].shape[0], method) # use all time indices of train trajectories
             # self.fit_sensors(len(self.time), method) # use all time indices of train trajectories
             self.fit_sensors(flattened_train_traj_sensor_measurements_and_params)
+            print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
             # transform
             transformed_flattened_train_traj_sensor_measurements_and_params, transformed_flattened_valid_traj_sensor_measurements_and_params,transformed_flattened_test_traj_sensor_measurements_and_params = \
             self.transform_sensor(flattened_train_traj_sensor_measurements_and_params, flattened_valid_traj_sensor_measurements_and_params,
                                                         flattened_test_traj_sensor_measurements_and_params)
-            
+            print('transformed_flattened_train_traj_sensor_measurements_and_params:', transformed_flattened_train_traj_sensor_measurements_and_params.shape)
+            print('ntimes', self.ntimes)
             # reshape back to (n_traj, n_time, n_sensors + n_params) to simply lag generating process
             transformed_train_traj_sensor_measurements_and_params = transformed_flattened_train_traj_sensor_measurements_and_params.reshape(
                 int(transformed_flattened_train_traj_sensor_measurements_and_params.shape[0]/self.ntimes), self.ntimes, self.nsensors + self.nparams)
