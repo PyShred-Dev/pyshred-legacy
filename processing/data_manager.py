@@ -18,7 +18,7 @@ class SHREDDataManager:
     def __init__(self, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15, scaling = "minmax", compression = True, reconstructor=True, forecastor=True):
         self.scaling = scaling
         self.compression = compression
-        self.time = time
+        self.time = time # expects a 1D numpy array
         self.lags = lags # number of time steps to look back
         self.data_processors = [] # a list storing SHREDDataProcessor objects
         self.reconstructor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED reconstructor
@@ -33,10 +33,12 @@ class SHREDDataManager:
         self.forecastor_data_elements = []
         self.reconstructor_flag = reconstructor
         self.forecastor_flag = forecastor
+        self.input_summary = None #
+        self.sensor_measurements = None # all sensor measurement
         # self.reconstructor = reconstructor # flag for generating datasets for SHRED reconstructor
         # self.forecastor = forecastor # flag for generating datasets for SHRED forecaster
 
-    def add(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = True, id = None, scaling = "minmax", time = None):
+    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = True, id = None, scaling = "minmax", time = None):
         """
         Creates and adds a new SHREDDataProcessor object.
         - file path: file path to data (string)
@@ -58,6 +60,7 @@ class SHREDDataManager:
         if len(self.data_processors) == 0:
             self.reconstructor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
             self.forecastor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
+            # self.sensor_measurements = time.reshape(-1,1) #reshape 1D to 2D array of shape (ntime, 1)
         # create and initialize SHREDData object
         data_processor = SHREDDataProcessor(
             data=data,
@@ -88,6 +91,13 @@ class SHREDDataManager:
                 )
             self.forecastor_data_elements.append(dataset_dict)
         
+        if data_processor.sensor_summary is not None and data_processor.sensor_measurements_pd is not None:
+            if self.input_summary is None and self.sensor_measurements is None:
+                self.input_summary = data_processor.sensor_summary
+                self.sensor_measurements = data_processor.sensor_measurements_pd
+            else:
+                self.input_summary = pd.concat([self.input_summary, data_processor.sensor_summary], axis = 0)
+                self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on='time', how = 'inner')
         data_processor.discard_data()
         self.data_processors.append(data_processor)
         
@@ -192,3 +202,27 @@ class SHREDDataManager:
         SHRED_test_dataset = SHREDDataset(test_recon_dataset, test_forecast_dataset)
 
         return SHRED_train_dataset, SHRED_valid_dataset, SHRED_test_dataset
+
+
+    def postprocess(self, data, uncompress = None, unscale = None):
+        uncompress = uncompress if uncompress is not None else self.compression is not None
+        unscale = unscale if unscale is not None else self.scaling == "minmax" # prob change to boolean
+        results = {}
+        start_index = 0
+        for data_processor in self.data_processors:
+            field_spatial_dim = data_processor.Y_spatial_dim
+            print('field_spatial_dim',field_spatial_dim)
+            field_data = data[:, start_index:start_index+field_spatial_dim]
+            if isinstance(data, torch.Tensor):
+                field_data = field_data.cpu().numpy()
+            start_index = field_spatial_dim + start_index
+            print('field_data.shape',field_data.shape)
+            field_data = data_processor.inverse_transform(field_data, uncompress, unscale)
+            results[data_processor.id] = field_data
+        return results
+
+
+    def generate_X(start = None, end = None, measurements = None, time = None, forecaster=None):
+        pass
+
+    def generate_X_from_
