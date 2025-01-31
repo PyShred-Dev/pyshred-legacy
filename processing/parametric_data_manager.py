@@ -33,13 +33,15 @@ class ParametricSHREDDataManager:
         self.valid_dataset = None
         self.test_dataset = None
         self.reconstructor_data_elements = []
- 
+
+        self.input_summary = None
+        self.input_measurments = None
 
     #TODO: allow for sensor measurments as well
     def add(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, params=None, compression=None, scaling=None, time=None, id=None):
         """
         Creates and adds a new SHREDDataProcessor object.
-        - file path: file path or list of file paths (if multiple trajectories) to data (string, list)
+        - file path: file path
         - random_sensors: number of randomly placed stationary sensors (integer).
         - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
                               If multiple stationary sensors, put tuples into a list (tuple or list of tuples).
