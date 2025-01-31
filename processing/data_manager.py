@@ -96,7 +96,7 @@ class SHREDDataManager:
                 self.input_summary = data_processor.sensor_summary
                 self.sensor_measurements = data_processor.sensor_measurements_pd
             else:
-                self.input_summary = pd.concat([self.input_summary, data_processor.sensor_summary], axis = 0)
+                self.input_summary = pd.concat([self.input_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
                 self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on='time', how = 'inner')
         data_processor.discard_data()
         self.data_processors.append(data_processor)
@@ -222,7 +222,45 @@ class SHREDDataManager:
         return results
 
 
-    def generate_X(start = None, end = None, measurements = None, time = None, forecaster=None):
-        pass
-
-    def generate_X_from_
+    def generate_X(self, start = None, end = None, measurements = None, time = None, forecaster=None):
+        results = None
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        start_sensor = 0
+        if start is None and end is None:
+            # generate lagged sequences from measurements
+            for data_processor in self.data_processors:
+                end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
+                result = data_processor.transform_X(measurements[:,start_sensor:end_sensor])
+                if results is None:
+                    results = result
+                else:
+                    results = np.concatenate((results, result), axis = 1)
+                start_sensor = end_sensor
+            results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
+        else:
+            # generate lagged sequences from start to end (inclusive)
+            for data_processor in self.data_processors:
+                if data_processor.sensor_measurements is not None:
+                    end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
+                    if measurements is not None:
+                        field_measurements = measurements[:,start_sensor:end_sensor]
+                        result = data_processor.generate_X(end = end, measurements = field_measurements, time = time)
+                    else:
+                        result = data_processor.generate_X(end = end, measurements = None, time = time)
+                    if results is None:
+                        results = result
+                    else:
+                        results = np.concatenate((results, result), axis = 1)
+                    start_sensor = end_sensor
+            # extract indices without data (gaps)
+            gap_indices = np.where(np.isnan(results).any(axis=1))[0]
+            for gap in gap_indices:
+                # gap is being forecasted, gap - 1 is 'current'
+                gap_lagged_sequence = results[gap - 1 - self.lags:gap,:].copy()
+                gap_lagged_sequence = gap_lagged_sequence[np.newaxis,:,:]
+                gap_lagged_sequence = torch.tensor(gap_lagged_sequence, dtype=torch.float32, device=device)
+                results[gap] = forecaster(gap_lagged_sequence).detach().numpy()
+            results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
+            results = results[start:end+1,:,:]
+        results = torch.tensor(results, dtype=torch.float32, device=device)
+        return results

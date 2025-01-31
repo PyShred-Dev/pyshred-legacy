@@ -64,53 +64,57 @@ class SHREDDataProcessor:
         """
         X_train, X_valid, X_test = None, None, None
         y_train, y_valid, y_test = None, None, None
-        # get sensor data
+
+        # get sensor measurements from sensor locations
         sensor_measurements_dict = get_sensor_measurements(
-            full_state_data=self.full_state_data, 
-            id=self.id, 
+            full_state_data=self.full_state_data,
+            id=self.id,
             time=self.time,
             random_sensors=self.random_sensors,
             stationary_sensors =self.stationary_sensors,
             mobile_sensors=self.mobile_sensors
         )
-        
+
         if sensor_measurements_dict['sensor_measurements'] is not None:
             self.sensor_measurements = sensor_measurements_dict['sensor_measurements'].drop(columns=['time']).to_numpy()
             self.sensor_measurements_pd = sensor_measurements_dict['sensor_measurements']
             self.sensor_summary = sensor_measurements_dict['sensor_summary']
-        
-        # check if sensor_measurements exist
+
         if self.sensor_measurements is not None:
-            # fit
-            self.fit_sensors(train_indices, method)
-            # transform
-            self.transform_sensor(method)
+            # fit and transform sensor measurements
+            if self.scaling is not None:
+                self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
+                self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
+
             # generate X data
-            # if method == 'random':
-            X_train, X_valid, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
-            # elif method == 'sequential':
-            #     X_train, X_valid, X_test = self.generate_X_train_val_test_forecaster(train_indices, val_indices, test_indices, method)
+            lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
+            X_train = lagged_sensor_sequences[train_indices]
+            X_valid = lagged_sensor_sequences[val_indices]
+            X_test = lagged_sensor_sequences[test_indices]
+
         if method == 'random':
             # flattens full state data into into 2D array with time along axis 0.
-            self.full_state_data = self.flatten(self.full_state_data)
-            print('self.full_state_data flattened', self.full_state_data.shape)
-            # fit (fit and transform can be combine with a wrapper or just integrate the code together)
+            self.full_state_data = flatten(self.full_state_data)
+            # fit
             self.fit(train_indices, method)
             # transform
             self.transform(method)
             # generate y data
-            y_train, y_valid, y_test = self.generate_y_train_val_test(train_indices, val_indices, test_indices, method)
+            y_train, y_valid, y_test = generate_y_train_val_test(self.transformed_data, train_indices, val_indices, test_indices, method)
             # save shape for post processing
             self.Y_spatial_dim = y_train.shape[1]
+            self.full_state_data = unflatten(data = self.full_state_data, spatial_shape=self.data_spatial_shape)
 
-            self.full_state_data = self.unflatten(self.full_state_data)
         # get forecaster data if sensor measurements exist
-        elif method == 'sequential' and self.sensor_measurements is not None:
-            y_train, y_valid, y_test = self.generate_y_forecaster_train_val_test(X_train, X_valid, X_test)
+        elif self.sensor_measurements is not None:
+            y_train = X_train[1:, -1, :]  # Use the sensor measurements at the next timestep (1399, 5)
+            y_valid = X_valid[1:, -1, :]
+            y_test = X_test[1:, -1, :]
             # remove final timestep of X since no y (next sensor measurement) exists for the final timestep
             X_train = X_train[:-1, :, :]
             X_valid = X_valid[:-1, :, :]
             X_test = X_test[:-1, :, :]
+
         if X_train is not None and X_valid is not None and X_test is not None: # aka make sure sensor data exists, does not work for setting train, validation, and test to None/0 yet
             return {
                 'train': (X_train, y_train),
@@ -124,32 +128,6 @@ class SHREDDataProcessor:
                 'test': (None, y_test)
             }
 
-
-    def fit_sensors(self, train_indices, method):
-        """
-        Takes in train_indices, method ("random" or "sequential")
-        Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
-        Scaling: fits either MinMaxScaler or Standard Scaler.
-        Stores fitted scalers as object attributes.
-        """
-        if method not in self.METHODS:
-            raise ValueError(f"Invalid method '{method}'. Choose from {self.METHODS}.")
-
-        # scaling full-state data
-        if self.scaling is not None:
-            scaler_class = MinMaxScaler if self.scaling == 'minmax' else StandardScaler
-            scaler = scaler_class()
-            self.sensor_scaler[method] = scaler.fit(self.sensor_measurements[train_indices])
-
-
-    def transform_sensor(self, method):
-        """
-        Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
-        self.transformed_sensor_data to scaled scnsor_data (optional) have time on axis 0 (transpose).
-        """
-        # Perform scaling if all scaler-related attributes exist
-        if self.sensor_scaler.get(method) is not None:
-            self.transformed_sensor_data[method] = self.sensor_scaler[method].transform(self.sensor_measurements)
     
     
     def fit(self, train_indices, method):
@@ -247,41 +225,10 @@ class SHREDDataProcessor:
         # check if compression is None
         if self.right_singular_values.get('random') is not None and uncompress is True:
             data = data @ self.right_singular_values.get('random')
-            data = self.unflatten(data)
+            data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
         return data
 
 
-
-
-    def generate_X_train_val_test(self, train_indices, val_indices, test_indices, method):
-        """
-        Generates the input data for SHRED.
-        Expects self.sensor_measurements to be a 2D numpy array with time is axis 0.
-        Output: 3D torch.tensor with timesteps along axis 0, lags along axis 1, sensors along axis 2.
-        Output: 3D numpy arrays with timesteps along axis 0, lags along axis 1, sensors along axis 2.
-        """
-        # need to pass in the first lags number of data set well though
-        lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
-        train = lagged_sensor_sequences[train_indices]
-        valid = lagged_sensor_sequences[val_indices]
-        test = lagged_sensor_sequences[test_indices]
-        return train, valid, test
-    
-    # def generate_X_forecaster(self, train_indices, val_indices, test_indices, method):
-    #     """
-    #     Generates the input data for SHRED.
-    #     Expects self.sensor_measurements to be a 2D numpy array with time is axis 0.
-    #     Output: 3D torch.tensor with timesteps along axis 0, lags along axis 1, sensors along axis 2.
-    #     Output: 3D numpy arrays with timesteps along axis 0, lags along axis 1, sensors along axis 2.
-    #     """
-    #     # need to pass in the first lags number of data set well though
-    #     # add one so forecaster can predict the very first frame
-    #     # padding is expanded by one, so first prediction is the very first non-padded value
-    #     lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags+1)
-    #     train = lagged_sensor_sequences[train_indices+1]
-    #     valid = lagged_sensor_sequences[val_indices+1]
-    #     test = lagged_sensor_sequences[test_indices+1]
-    #     return train, valid, test
     
     def generate_y_forecaster_train_val_test(self, X_train, X_valid, X_test): 
         train = X_train[1:, -1, :]  # Use the sensor measurements at the next timestep (1399, 5)
@@ -289,51 +236,37 @@ class SHREDDataProcessor:
         test = X_test[1:, -1, :]
         return train, valid,test
 
-    def generate_y_train_val_test(self, train_indices, val_indices, test_indices, method):
+
+
+    def generate_X(self, end, measurements, time):
         """
-        Generates the target data for SHRED.
-        The target data are full-state data that is compresssed (optional) and scaled (optional),
-        and flattens the state data.
-        Output: 2D numpy array with timesteps along axis 0 and flattened state data along axis 1.
+        Generates sensor measurements from time = 0
+        to time = end. Uses given measurements as
+        well as well as stored sensor measurements.
+        Gaps are filled with np.nan.
         """
-        # train = self.transformed_data[method][train_indices + self.lags]
-        # valid = self.transformed_data[method][val_indices + self.lags]
-        # test = self.transformed_data[method][test_indices + self.lags]
-        train = self.transformed_data[method][train_indices]
-        valid = self.transformed_data[method][val_indices]
-        test = self.transformed_data[method][test_indices]
-        return train, valid, test
+        timesteps = end+1 # end_time inclusive
+        nsensors = self.sensor_measurements.shape[1] # make sure measurements dim matches
+        complete_measurements = np.full((timesteps, nsensors), np.nan)
+        if timesteps > len(self.sensor_measurements):
+            print('hello')
+            complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements
+        else:
+            print('bye')
+            complete_measurements[0:timesteps,:] = self.sensor_measurements[0:timesteps,:]
+        if measurements is not None and time is not None:
+            for i in range(len(time)):
+                if time[i] < complete_measurements.shape[0]:
+                    complete_measurements[time[i],:] = measurements[i,:]
+        complete_measurements = self.sensor_scaler['random'].transform(complete_measurements)
+        return complete_measurements
+
+    # used for transforming raw new sensor measurements
+    def transform_X(self, measurements):
+        return self.sensor_scaler['random'].transform(measurements)
 
 
-    def gnenerate_X(self,start, end, measurements, forecaster):
-        if start is None and end is None:
-            self._generate_new_X(measurements)
 
-    def _generate_new_X(self, measurements):
-        
-
-
-
-
-    def flatten(self, data):
-        """
-        Takes in a nd array where the time is along the axis 0.
-        Flattens the nd array into 2D array with time along axis 0.
-        """
-        self.data_spatial_shape = data.shape[1:]
-        # Reshape the data: keep time (axis 0) and flatten the remaining dimensions
-        return data.reshape(data.shape[0], -1)
-    
-    # def unflatten(self, data):
-    def unflatten(self, data):
-        """
-        Takes in a flatten array where time is along axis 0 and the a tuple spatial shape.
-        Reshapes the flattened array into nd array using the provided time_dim and spatial_dim.
-        """
-        if self.data_spatial_shape is None:
-            raise ValueError("Original data spatial shape is not available.")
-        original_shape = (data.shape[0],) + self.data_spatial_shape
-        return data.reshape(original_shape)
     
     def discard_data(self):
         self.full_state_data = None
