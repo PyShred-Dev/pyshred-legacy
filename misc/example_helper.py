@@ -169,3 +169,66 @@ def plot_recon_vs_truth(recon, truth):
     # Display the plots
     plt.tight_layout()
     plt.show()
+
+
+def plot_frame_comparison(data, data_truth, timestep, cmap="viridis"):
+    """
+    Plots a single frame (2D spatial slice) from the 3D time-series dataset 
+    and compares it to ground truth data.
+
+    Args:
+        data (numpy.ndarray): A 3D numpy array of shape (timesteps, height, width).
+        data_truth (numpy.ndarray): A 3D numpy array of the same shape as `data`.
+        timestep (int): The timestep to visualize.
+        cmap (str): The colormap for visualization (default: "viridis").
+
+    Raises:
+        ValueError: If the timestep is out of range or shapes do not match.
+    """
+    if data.shape != data_truth.shape:
+        raise ValueError(f"Shape mismatch: data shape {data.shape} != data_truth shape {data_truth.shape}")
+    
+    if not (0 <= timestep < data.shape[0]):
+        raise ValueError(f"Timestep {timestep} is out of range. Must be between 0 and {data.shape[0]-1}.")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Plot predicted/processed data
+    im1 = axes[0].imshow(data[timestep], cmap=cmap, aspect="auto")
+    axes[0].set_title(f"Model Output at Timestep {timestep}")
+    axes[0].set_xlabel("Width (256 pixels)")
+    axes[0].set_ylabel("Height (257 pixels)")
+    fig.colorbar(im1, ax=axes[0], label="Intensity")
+
+    # Plot ground truth data
+    im2 = axes[1].imshow(data_truth[timestep], cmap=cmap, aspect="auto")
+    axes[1].set_title(f"Ground Truth at Timestep {timestep}")
+    axes[1].set_xlabel("Width (256 pixels)")
+    fig.colorbar(im2, ax=axes[1], label="Intensity")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_frame(data, timestep, cmap="viridis"):
+    """
+    Plots a single frame (2D spatial slice) from the 3D time-series dataset.
+
+    Args:
+        data (numpy.ndarray): A 3D numpy array of shape (timesteps, height, width).
+        timestep (int): The timestep to visualize.
+        cmap (str): The colormap for visualization (default: "viridis").
+
+    Raises:
+        ValueError: If the timestep is out of range.
+    """
+    if not (0 <= timestep < data.shape[0]):
+        raise ValueError(f"Timestep {timestep} is out of range. Must be between 0 and {data.shape[0]-1}.")
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(data[timestep], cmap=cmap, aspect="auto")
+    plt.colorbar(label="Intensity")
+    plt.title(f"Frame at Timestep {timestep}")
+    plt.xlabel("Width (256 pixels)")
+    plt.ylabel("Height (257 pixels)")
+    plt.show()

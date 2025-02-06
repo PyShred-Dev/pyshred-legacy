@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 import torch
 
 
@@ -8,11 +9,16 @@ class SHREDDataset():
     recon_data is a TimeSeriesDataset object for SHRED Reconstructor
     forecast_data is a TimeSeriesDataset object for SHRED Forecaster
     """
-    def __init__(self, recon_data = None, forecast_data = None, time = None, sensor_measurements = None):
-        self.reconstructor = recon_data
-        self.forecaster = forecast_data
-        self.time = time
-        self.sensor_measurements = None
+    def __init__(self, random_reconstructor_dataset = None, temporal_reconstructor_dataset = None, sensor_forecaster_dataset = None):
+        if random_reconstructor_dataset is not None:
+            self.random_reconstructor_dataset = random_reconstructor_dataset
+        if temporal_reconstructor_dataset is not None:
+            self.temporal_reconstructor_dataset = temporal_reconstructor_dataset
+        if sensor_forecaster_dataset is not None:
+            self.sensor_forecaster_dataset = sensor_forecaster_dataset
+        
+        
+        
 
 
 class TimeSeriesDataset(torch.utils.data.Dataset):
@@ -57,12 +63,9 @@ def get_train_val_test_indices(n, train_size, val_size, test_size, method):
     num_train_indices = int(train_size * n)
     num_val_indices = int(val_size * n)
 
-    train_indices = indices[:num_train_indices]
-    if num_train_indices == 0 or num_val_indices == 0 or len(train_indices) == 0:
+    if num_train_indices == 0 or num_val_indices == 0 or (n - num_train_indices - num_val_indices) == 0:
         raise ValueError('Legnth of train_indices, val_indices, and test_indices each be length > 0.')
-    # shuffle train indices to ensure generalization
-    # NOTE: while train indices are being shuffled, the lags themselves is maintain the natural temporal order.
-    train_indices = np.random.permutation(train_indices)
+    train_indices = indices[:num_train_indices]
     val_indices = indices[num_train_indices:num_train_indices + num_val_indices]
     test_indices = indices[num_train_indices + num_val_indices:]
     return {
@@ -144,7 +147,7 @@ def generate_lagged_sequences(lags, full_state_data = None, random_sensors = Non
         "sensor_summary": sensor_summary,
     }
 
-def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors, mobile_sensors):
+def get_sensor_measurements(full_state_data, id, random_sensors, stationary_sensors, mobile_sensors, time):
     """
     - full_state_data: a nd numpy array with time on the first axis (axis 0)
     - random_sensors: number of randomly placed stationary sensors (integer)
@@ -163,14 +166,15 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
     """
     sensor_summary = []
     sensor_measurements = []
-
+    sensor_id_index = 0
     # generate random sensor locations
     if random_sensors is not None:
         if isinstance(random_sensors, int):
             random_sensor_locations = generate_random_sensor_locations(full_state = full_state_data, num_sensors = random_sensors)
             for sensor_coordinate in random_sensor_locations:
-                sensor_summary.append(['stationary (randomly selected)', sensor_coordinate])
+                sensor_summary.append([id, id + '-' + str(sensor_id_index), 'stationary (randomly selected)', sensor_coordinate])
                 sensor_measurements.append(full_state_data[(slice(None),) + sensor_coordinate]) # slice for time axis (all timesteps)
+                sensor_id_index+=1
         else:
             raise ValueError(f"Invalid `random_sensor`.")
 
@@ -180,8 +184,9 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
             stationary_sensors = [stationary_sensors]
         if all(isinstance(sensor, tuple) for sensor in stationary_sensors):
             for sensor_coordinate in stationary_sensors:
-                sensor_summary.append(['stationary (user selected)', sensor_coordinate])
+                sensor_summary.append([id, id + '-' + str(sensor_id_index), 'stationary (user selected)', sensor_coordinate])
                 sensor_measurements.append(full_state_data[(slice(None),) + sensor_coordinate])
+                sensor_id_index+=1
         else:
             raise ValueError(f"Invalid `stationary_sensors`.")
         
@@ -195,20 +200,36 @@ def get_sensor_measurements(full_state_data, random_sensors, stationary_sensors,
                         f"Number of mobile sensor coordinates ({len(mobile_sensor_coordinates)}) "
                         f"must match the number of timesteps ({full_state_data.shape[0]})."
                     )
-                sensor_summary.append(['mobile', mobile_sensor_coordinates])
+                sensor_summary.append([id, id + '-' + str(sensor_id_index), 'mobile', mobile_sensor_coordinates])
                 sensor_measurements.append([
                     full_state_data[timestep][sensor_coordinate]
                     for timestep, sensor_coordinate in enumerate(mobile_sensor_coordinates)
                 ])
+                sensor_id_index+=1
         else:
             raise ValueError(f"Invalid `mobile_sensors`.")
     # transpose sensor_measurements so time up on axis 0, number of sensors on axis 1
-    sensor_measurements = np.array(sensor_measurements).T
-    sensor_summary = pd.DataFrame(sensor_summary, columns=["sensor type", "location/trajectory"])
+    sensor_summary = None if len(sensor_summary) == 0 else pd.DataFrame(sensor_summary, columns=["field id", "sensor id", "sensor type", "location/trajectory"])
+    if len(sensor_measurements) == 0:
+        sensor_measurements = None
+    else:
+        sensor_measurements = np.array(sensor_measurements).T
+        sensor_measurements = pd.DataFrame(sensor_measurements, columns = sensor_summary['sensor id'].tolist())
+        sensor_measurements.insert(0, 'time', time)
     return {
         "sensor_measurements": sensor_measurements,
         "sensor_summary": sensor_summary,
     }
+
+
+
+# def get_parametric_sensor_measurements(full_state_data, id, random_sensors, stationary_sensors, mobile_sensors, time, param):
+#     results = get_sensor_measurements(full_state_data, id, random_sensors, stationary_sensors, mobile_sensors, time)
+#     param_df = pd.DataFrame(param, columns=[f"param {i}" for i in range(traj.shape[2])])
+#     # results["sensor_measurements"]
+#     df_combined = pd.concat([results["sensor_measurements"], param_df], axis=1)
+
+
 
 
 def generate_lagged_sequences_from_sensor_measurements(sensor_measurements, lags):
@@ -225,3 +246,80 @@ def generate_lagged_sequences_from_sensor_measurements(sensor_measurements, lags
     for i in range(lagged_sequences.shape[0]):
         lagged_sequences[i] = sensor_measurements[i:i+lags+1, :]
     return lagged_sequences
+
+
+def generate_forecast_lagged_sequences_from_sensor_measurements(sensor_measurements, lags):
+    """
+    Generates forecast lagged sequences from sensor_measurments.
+    Expects self.transformed_sensor_measurements to be a 2D numpy array with time is axis 0.
+    Returns 3D numpy array of lagged sequences with timesteps along axis 0, lags along axis 1, sensors along axis 2.
+    """
+    num_timesteps = sensor_measurements.shape[0]
+    num_sensors = sensor_measurements.shape[1]
+    # concatenate zeros padding at beginning of sensor data along axis 0
+    sensor_measurements = np.concatenate((np.zeros((lags+1, num_sensors)), sensor_measurements), axis = 0)
+    lagged_sequences = np.empty((num_timesteps+1, lags + 1, num_sensors))
+    for i in range(lagged_sequences.shape[0]):
+        lagged_sequences[i] = sensor_measurements[i:i+lags+1, :]
+    return lagged_sequences
+
+
+
+def fit_sensors(train_indices, sensor_measurements):
+    """
+    Takes in train_indices, method ("random" or "sequential")
+    Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
+    Scaling: fits either MinMaxScaler or Standard Scaler.
+    Stores fitted scalers as object attributes.
+    """
+    # scaling full-state data
+    scaler = MinMaxScaler()
+    return scaler.fit(sensor_measurements[train_indices])
+
+
+def transform_sensor(sensor_scaler, sensor_measurements):
+    """
+    Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
+    self.transformed_sensor_data to scaled scnsor_data (optional) have time on axis 0 (transpose).
+    """
+    # Perform scaling if all scaler-related attributes exist
+    return sensor_scaler.transform(sensor_measurements)
+
+def flatten(data):
+    """
+    Takes in a nd array where the time is along the axis 0.
+    Flattens the nd array into 2D array with time along axis 0.
+    """
+    # Reshape the data: keep time (axis 0) and flatten the remaining dimensions
+    return data.reshape(data.shape[0], -1)
+
+def unflatten(data, spatial_shape):
+    """
+    Takes in a flatten array where time is along axis 0 and the a tuple spatial shape.
+    Reshapes the flattened array into nd array using the provided time_dim and spatial_dim.
+    """
+    original_shape = (data.shape[0],) + spatial_shape
+    return data.reshape(original_shape)
+
+def generate_y_train_val_test(data, train_indices, val_indices, test_indices, method):
+    """
+    Generates the target data for SHRED.
+    The target data are full-state data that is compresssed (optional) and scaled (optional),
+    and flattens the state data.
+    Output: 2D numpy array with timesteps along axis 0 and flattened state data along axis 1.
+    """
+    train = data[method][train_indices]
+    valid = data[method][val_indices]
+    test = data[method][test_indices]
+    return train, valid, test
+
+
+
+def l2(datatrue, datapred):
+    datatrue = datatrue.to(torch.float64)
+    datapred = datapred.to(torch.float64)
+    norm_true = torch.linalg.norm(datatrue)
+    norm_diff = torch.linalg.norm(datapred - datatrue)
+    if norm_true == 0:  # Avoid division by zero
+        return torch.tensor(float('nan'))  # Handle edge case
+    return norm_diff / norm_true

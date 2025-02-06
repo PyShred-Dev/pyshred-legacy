@@ -15,30 +15,40 @@ class SHREDDataManager:
     - postprocess
     """
 
-    def __init__(self, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15, scaling = "minmax", compression = True, reconstructor=True, forecastor=True):
+    METHODS = {
+        'all': ['random_reconstructor', 'temporal_reconstructor', 'sensor_forecaster'],
+        'reconstruct': ['random_reconstructor'],
+        'predict': ['temporal_reconstructor'],
+        'forecast': ['sensor_forecaster', 'temporal_reconstructor']
+    }
+
+
+    def __init__(self, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15, scaling = True, compression = True, method = 'all'):
         self.scaling = scaling
         self.compression = compression
         self.time = time # expects a 1D numpy array
         self.lags = lags # number of time steps to look back
         self.data_processors = [] # a list storing SHREDDataProcessor objects
-        self.reconstructor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED reconstructor
-        self.forecastor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED forecastor
+        self.random_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED reconstructor
+        self.sequential_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED forecastor
         self.train_size = train_size
         self.val_size = val_size
         self.test_size = test_size
         self.train_dataset = None
         self.valid_dataset = None
         self.test_dataset = None
-        self.reconstructor_data_elements = []
-        self.forecastor_data_elements = []
-        self.reconstructor_flag = reconstructor
-        self.forecastor_flag = forecastor
+        self.random_reconstructor = []
+        self.sensor_forecaster = []
+        self.temporal_reconstructor = []
+        # self.reconstructor_flag = reconstructor
+        # self.forecastor_flag = forecastor
         self.input_summary = None #
         self.sensor_measurements = None # all sensor measurement
+        self.method = method
         # self.reconstructor = reconstructor # flag for generating datasets for SHRED reconstructor
         # self.forecastor = forecastor # flag for generating datasets for SHRED forecaster
 
-    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = True, id = None, scaling = "minmax", time = None):
+    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, scaling = None, time = None):
         """
         Creates and adds a new SHREDDataProcessor object.
         - file path: file path to data (string)
@@ -56,11 +66,8 @@ class SHREDDataManager:
         compression = compression if compression is not None else self.compression
         scaling = scaling if scaling is not None else self.scaling
         time = time if time is not None else self.time
-        # generate train/val/test indices based on effective number of timesteps in initial SHREDDataProcessor object
-        if len(self.data_processors) == 0:
-            self.reconstructor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
-            self.forecastor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
-            # self.sensor_measurements = time.reshape(-1,1) #reshape 1D to 2D array of shape (ntime, 1)
+
+
         # create and initialize SHREDData object
         data_processor = SHREDDataProcessor(
             data=data,
@@ -73,24 +80,8 @@ class SHREDDataManager:
             scaling=scaling,
             id=id
         )
-        if self.reconstructor_flag:
-            dataset_dict = data_processor.generate_dataset(
-                        self.reconstructor_indices['train'],
-                        self.reconstructor_indices['validation'],
-                        self.reconstructor_indices['test'],
-                        method='random'
-                    )
-            self.reconstructor_data_elements.append(dataset_dict)
-        
-        if self.forecastor_flag:
-            dataset_dict = data_processor.generate_dataset(
-                    self.forecastor_indices['train'],
-                    self.forecastor_indices['validation'],
-                    self.forecastor_indices['test'],
-                    method='sequential'
-                )
-            self.forecastor_data_elements.append(dataset_dict)
-        
+
+        # save sensor-related information to sensor-related attributes
         if data_processor.sensor_summary is not None and data_processor.sensor_measurements_pd is not None:
             if self.input_summary is None and self.sensor_measurements is None:
                 self.input_summary = data_processor.sensor_summary
@@ -98,10 +89,45 @@ class SHREDDataManager:
             else:
                 self.input_summary = pd.concat([self.input_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
                 self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on='time', how = 'inner')
+
+
+        # generate train/val/test indices
+        if len(self.data_processors) == 0:
+            self.random_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
+            self.sequential_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
+            print('self.random_indices["train"]', self.random_indices["train"])
+
+
+        if 'random_reconstructor' in self.METHODS[self.method]:
+            dataset_dict = data_processor.generate_dataset(
+                self.random_indices['train'],
+                self.random_indices['validation'],
+                self.random_indices['test'],
+                method='random_reconstructor'
+            )
+            self.random_reconstructor.append(dataset_dict)
+
+        if 'temporal_reconstructor' in self.METHODS[self.method]:
+            dataset_dict = data_processor.generate_dataset(
+                self.sequential_indices['train'],
+                self.sequential_indices['validation'],
+                self.sequential_indices['test'],
+                method='temporal_reconstructor' # different name so different scalers etc.
+            )
+            self.temporal_reconstructor.append(dataset_dict)
+
+        if 'sensor_forecaster' in self.METHODS[self.method]:
+            dataset_dict = data_processor.generate_dataset(
+                self.sequential_indices['train'],
+                self.sequential_indices['validation'],
+                self.sequential_indices['test'],
+                method='sensor_forecaster'
+            )
+            self.sensor_forecaster.append(dataset_dict)
+
         data_processor.discard_data()
         self.data_processors.append(data_processor)
-        
-    
+
 
     def preprocess(self):
         """
@@ -134,39 +160,57 @@ class SHREDDataManager:
                 combined_y,
             )
 
-        # Initialize datasets for reconstructor and forecastor
-        X_train_recon, y_train_recon = None, None
-        X_valid_recon, y_valid_recon = None, None
-        X_test_recon, y_test_recon = None, None
+        # Initialize datasets
+        X_train_random_reconstructor, y_train_random_reconstructor = None, None
+        X_valid_random_reconstructor, y_valid_random_reconstructor = None, None
+        X_test_random_reconstructor, y_test_random_reconstructor = None, None
 
-        X_train_forecast, y_train_forecast = None, None
-        X_valid_forecast, y_valid_forecast = None, None
-        X_test_forecast, y_test_forecast = None, None
+        X_train_temporal_reconstructor, y_train_temporal_reconstructor = None, None
+        X_valid_temporal_reconstructor, y_valid_temporal_reconstructor = None, None
+        X_test_temporal_reconstructor, y_test_temporal_reconstructor = None, None
 
-        # Process reconstructor datasets
-        if self.reconstructor_flag:
-            for dataset_dict in self.reconstructor_data_elements:
-                X_train_recon, y_train_recon = concatenate_datasets(
-                    X_train_recon, y_train_recon, dataset_dict['train'][0], dataset_dict['train'][1]
+        X_train_sensor_forecaster, y_train_sensor_forecaster = None, None
+        X_valid_sensor_forecaster, y_valid_sensor_forecaster = None, None
+        X_test_sensor_forecaster, y_test_sensor_forecaster = None, None
+
+        # Process random reconstructor datasets
+        if 'random_reconstructor' in self.METHODS[self.method]:
+            for dataset_dict in self.random_reconstructor:
+                X_train_random_reconstructor, y_train_random_reconstructor = concatenate_datasets(
+                    X_train_random_reconstructor, y_train_random_reconstructor, dataset_dict['train'][0], dataset_dict['train'][1]
                 )
-                X_valid_recon, y_valid_recon = concatenate_datasets(
-                    X_valid_recon, y_valid_recon, dataset_dict['validation'][0], dataset_dict['validation'][1]
+                X_valid_random_reconstructor, y_valid_random_reconstructor = concatenate_datasets(
+                    X_valid_random_reconstructor, y_valid_random_reconstructor, dataset_dict['validation'][0], dataset_dict['validation'][1]
                 )
-                X_test_recon, y_test_recon = concatenate_datasets(
-                    X_test_recon, y_test_recon, dataset_dict['test'][0], dataset_dict['test'][1]
+                X_test_random_reconstructor, y_test_random_reconstructor = concatenate_datasets(
+                    X_test_random_reconstructor, y_test_random_reconstructor, dataset_dict['test'][0], dataset_dict['test'][1]
                 )
+
+        # Process random reconstructor datasets
+        if 'temporal_reconstructor' in self.METHODS[self.method]:
+            for dataset_dict in self.temporal_reconstructor:
+                X_train_temporal_reconstructor, y_train_temporal_reconstructor = concatenate_datasets(
+                    X_train_temporal_reconstructor, y_train_temporal_reconstructor, dataset_dict['train'][0], dataset_dict['train'][1]
+                )
+                X_valid_temporal_reconstructor, y_valid_temporal_reconstructor = concatenate_datasets(
+                    X_valid_temporal_reconstructor, y_valid_temporal_reconstructor, dataset_dict['validation'][0], dataset_dict['validation'][1]
+                )
+                X_test_temporal_reconstructor, y_test_temporal_reconstructor = concatenate_datasets(
+                    X_test_temporal_reconstructor, y_test_temporal_reconstructor, dataset_dict['test'][0], dataset_dict['test'][1]
+                )
+
 
         # Process forecastor datasets
-        if self.forecastor_flag:
-            for dataset_dict in self.forecastor_data_elements:
-                X_train_forecast, y_train_forecast = concatenate_datasets(
-                    X_train_forecast, y_train_forecast, dataset_dict['train'][0], dataset_dict['train'][1]
+        if 'sensor_forecaster' in self.METHODS[self.method]:
+            for dataset_dict in self.sensor_forecaster:
+                X_train_sensor_forecaster, y_train_sensor_forecaster = concatenate_datasets(
+                    X_train_sensor_forecaster, y_train_sensor_forecaster, dataset_dict['train'][0], dataset_dict['train'][1]
                 )
-                X_valid_forecast, y_valid_forecast = concatenate_datasets(
-                    X_valid_forecast, y_valid_forecast, dataset_dict['validation'][0], dataset_dict['validation'][1]
+                X_valid_sensor_forecaster, y_valid_sensor_forecaster = concatenate_datasets(
+                    X_valid_sensor_forecaster, y_valid_sensor_forecaster, dataset_dict['validation'][0], dataset_dict['validation'][1]
                 )
-                X_test_forecast, y_test_forecast = concatenate_datasets(
-                    X_test_forecast, y_test_forecast, dataset_dict['test'][0], dataset_dict['test'][1]
+                X_test_sensor_forecaster, y_test_sensor_forecaster = concatenate_datasets(
+                    X_test_sensor_forecaster, y_test_sensor_forecaster, dataset_dict['test'][0], dataset_dict['test'][1]
                 )
 
 
@@ -174,50 +218,62 @@ class SHREDDataManager:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Convert data to torch tensors and move to the specified device
-        X_train_recon = torch.tensor(X_train_recon, dtype=torch.float32, device=device)
-        y_train_recon = torch.tensor(y_train_recon, dtype=torch.float32, device=device)
-        X_valid_recon = torch.tensor(X_valid_recon, dtype=torch.float32, device=device)
-        y_valid_recon = torch.tensor(y_valid_recon, dtype=torch.float32, device=device)
-        X_test_recon = torch.tensor(X_test_recon, dtype=torch.float32, device=device)
-        y_test_recon = torch.tensor(y_test_recon, dtype=torch.float32, device=device)
+        X_train_random_reconstructor = torch.tensor(X_train_random_reconstructor, dtype=torch.float32, device=device)
+        y_train_random_reconstructor = torch.tensor(y_train_random_reconstructor, dtype=torch.float32, device=device)
+        X_valid_random_reconstructor = torch.tensor(X_valid_random_reconstructor, dtype=torch.float32, device=device)
+        y_valid_random_reconstructor = torch.tensor(y_valid_random_reconstructor, dtype=torch.float32, device=device)
+        X_test_random_reconstructor = torch.tensor(X_test_random_reconstructor, dtype=torch.float32, device=device)
+        y_test_random_reconstructor = torch.tensor(y_test_random_reconstructor, dtype=torch.float32, device=device)
 
-        X_train_forecast = torch.tensor(X_train_forecast, dtype=torch.float32, device=device)
-        y_train_forecast = torch.tensor(y_train_forecast, dtype=torch.float32, device=device)
-        X_valid_forecast = torch.tensor(X_valid_forecast, dtype=torch.float32, device=device)
-        y_valid_forecast = torch.tensor(y_valid_forecast, dtype=torch.float32, device=device)
-        X_test_forecast = torch.tensor(X_test_forecast, dtype=torch.float32, device=device)
-        y_test_forecast = torch.tensor(y_test_forecast, dtype=torch.float32, device=device)
+        X_train_temporal_reconstructor = torch.tensor(X_train_temporal_reconstructor, dtype=torch.float32, device=device)
+        y_train_temporal_reconstructor = torch.tensor(y_train_temporal_reconstructor, dtype=torch.float32, device=device)
+        X_valid_temporal_reconstructor = torch.tensor(X_valid_temporal_reconstructor, dtype=torch.float32, device=device)
+        y_valid_temporal_reconstructor = torch.tensor(y_valid_temporal_reconstructor, dtype=torch.float32, device=device)
+        X_test_temporal_reconstructor = torch.tensor(X_test_temporal_reconstructor, dtype=torch.float32, device=device)
+        y_test_temporal_reconstructor = torch.tensor(y_test_temporal_reconstructor, dtype=torch.float32, device=device)
+
+        X_train_sensor_forecaster = torch.tensor(X_train_sensor_forecaster, dtype=torch.float32, device=device)
+        y_train_sensor_forecaster = torch.tensor(y_train_sensor_forecaster, dtype=torch.float32, device=device)
+        X_valid_sensor_forecaster = torch.tensor(X_valid_sensor_forecaster, dtype=torch.float32, device=device)
+        y_valid_sensor_forecaster = torch.tensor(y_valid_sensor_forecaster, dtype=torch.float32, device=device)
+        X_test_sensor_forecaster = torch.tensor(X_test_sensor_forecaster, dtype=torch.float32, device=device)
+        y_test_sensor_forecaster = torch.tensor(y_test_sensor_forecaster, dtype=torch.float32, device=device)
 
         # Create TimeSeriesDataset objects
-        train_recon_dataset = TimeSeriesDataset(X_train_recon, y_train_recon)
-        valid_recon_dataset = TimeSeriesDataset(X_valid_recon, y_valid_recon)
-        test_recon_dataset = TimeSeriesDataset(X_test_recon, y_test_recon)
+        train_random_reconstructor_dataset = TimeSeriesDataset(X_train_random_reconstructor, y_train_random_reconstructor)
+        valid_random_reconstructor_dataset = TimeSeriesDataset(X_valid_random_reconstructor, y_valid_random_reconstructor)
+        test_random_reconstructor_dataset = TimeSeriesDataset(X_test_random_reconstructor, y_test_random_reconstructor)
 
-        train_forecast_dataset = TimeSeriesDataset(X_train_forecast, y_train_forecast)
-        valid_forecast_dataset = TimeSeriesDataset(X_valid_forecast, y_valid_forecast)
-        test_forecast_dataset = TimeSeriesDataset(X_test_forecast, y_test_forecast)
+        train_temporal_reconstructor_dataset = TimeSeriesDataset(X_train_temporal_reconstructor, y_train_temporal_reconstructor)
+        valid_temporal_reconstructor_dataset = TimeSeriesDataset(X_valid_temporal_reconstructor, y_valid_temporal_reconstructor)
+        test_temporal_reconstructor_dataset = TimeSeriesDataset(X_test_temporal_reconstructor, y_test_temporal_reconstructor)
 
-        SHRED_train_dataset = SHREDDataset(train_recon_dataset, train_forecast_dataset)
-        SHRED_valid_dataset = SHREDDataset(valid_recon_dataset, valid_forecast_dataset)
-        SHRED_test_dataset = SHREDDataset(test_recon_dataset, test_forecast_dataset)
+
+        train_sensor_forecaster_dataset = TimeSeriesDataset(X_train_sensor_forecaster, y_train_sensor_forecaster)
+        valid_sensor_forecaster_dataset = TimeSeriesDataset(X_valid_sensor_forecaster, y_valid_sensor_forecaster)
+        test_sensor_forecaster_dataset = TimeSeriesDataset(X_test_sensor_forecaster, y_test_sensor_forecaster)
+
+        SHRED_train_dataset = SHREDDataset(train_random_reconstructor_dataset, train_temporal_reconstructor_dataset, train_sensor_forecaster_dataset)
+        SHRED_valid_dataset = SHREDDataset(valid_random_reconstructor_dataset, valid_temporal_reconstructor_dataset, valid_sensor_forecaster_dataset)
+        SHRED_test_dataset = SHREDDataset(test_random_reconstructor_dataset, test_temporal_reconstructor_dataset, test_sensor_forecaster_dataset)
 
         return SHRED_train_dataset, SHRED_valid_dataset, SHRED_test_dataset
 
 
-    def postprocess(self, data, uncompress = None, unscale = None):
-        uncompress = uncompress if uncompress is not None else self.compression is not None
-        unscale = unscale if unscale is not None else self.scaling == "minmax" # prob change to boolean
+    def postprocess(self, data, uncompress = True, unscale = True, method = None):
+        # uncompress = uncompress if uncompress is not None else self.compression is not None
+        # unscale = unscale if unscale is not None else self.scaling == "minmax" # prob change to boolean
         results = {}
         start_index = 0
         for data_processor in self.data_processors:
             field_spatial_dim = data_processor.Y_spatial_dim
-            print('field_spatial_dim',field_spatial_dim)
+            # print('field_spatial_dim',field_spatial_dim)
             field_data = data[:, start_index:start_index+field_spatial_dim]
             if isinstance(data, torch.Tensor):
                 field_data = field_data.cpu().numpy()
             start_index = field_spatial_dim + start_index
-            print('field_data.shape',field_data.shape)
-            field_data = data_processor.inverse_transform(field_data, uncompress, unscale)
+            # print('field_data.shape',field_data.shape)
+            field_data = data_processor.inverse_transform(field_data, uncompress, unscale, method)
             results[data_processor.id] = field_data
         return results
 

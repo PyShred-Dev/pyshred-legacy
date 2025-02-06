@@ -1,3 +1,4 @@
 from .shred.models import (
-    SHRED
+    SHRED,
+    evaluate,
 )

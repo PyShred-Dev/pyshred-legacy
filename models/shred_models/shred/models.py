@@ -3,9 +3,12 @@ import pandas as pd
 import torch.nn as nn
 from sklearn.utils.extmath import randomized_svd
 import numpy as np
+import copy
 # from tqdm import tqdm
 from torch.utils.data import DataLoader
 import pickle
+
+from processing.utils import generate_lagged_sequences_from_sensor_measurements, l2
 from .process_data import *
 from .reconstruction_result import *
 # from .abstract_shred import AbstractSHRED
@@ -20,6 +23,7 @@ from ...decoder_models import *
 from ...sequence_models import *
 from ..forecaster.forecaster import FORECASTER
 from ..reconstructor.reconstructor import RECONSTRUCTOR
+
 
 # from sdn_module import SDNModule
 # from lstm_module import LSTMModule
@@ -65,7 +69,7 @@ class SHRED(nn.Module):
     sensor_data : 2d-array of shape (n_sensors, n_timesteps)
         Sensor data used during `fit`
     
-    recon_validation_errors : numpy.ndarray
+    random_reconstructor_validation_errors : numpy.ndarray
         History of reconstructor validation errors at each training epoch.
     
     recon_forecast_validation_errors : numpy.ndarray
@@ -134,37 +138,49 @@ class SHRED(nn.Module):
         super().__init__()
         # Initialize Sequence Model
         if isinstance(sequence, AbstractSequence):
-            self._sequence_model = sequence
+            self._sequence_model_random_reconstructor = copy.deepcopy(sequence)
+            self._sequence_model_temporal_reconstructor = copy.deepcopy(sequence)
+            self._sequence_model_sensor_forecaster = copy.deepcopy(sequence)
         elif isinstance(sequence, str):
             sequence = sequence.upper()
             if sequence not in SEQUENCE_MODELS:
                 raise ValueError(f"Invalid sequence model: {sequence}. Choose from: {list(SEQUENCE_MODELS.keys())}")
-            self._sequence_model = SEQUENCE_MODELS[sequence]()
+            self._sequence_model_random_reconstructor = SEQUENCE_MODELS[sequence]()
+            self._sequence_model_temporal_reconstructor = SEQUENCE_MODELS[sequence]()
+            self._sequence_model_sensor_forecaster = SEQUENCE_MODELS[sequence]()
         else:
             raise ValueError("Invalid type for 'sequence'. Must be str or an AbstractSequence instance.")
 
         # Initialize Decoder Model
         if isinstance(decoder, AbstractDecoder):
-            self._decoder_model = decoder
+            self._decoder_model_random_reconstructor = copy.deepcopy(decoder)
+            self._decoder_model_temporal_reconstructor = copy.deepcopy(decoder)
+            self._decoder_model_sensor_forecaster = copy.deepcopy(decoder)
+
         elif isinstance(decoder, str):
             decoder = decoder.upper()
             if decoder not in DECODER_MODELS:
                 raise ValueError(f"Invalid decoder model: {decoder}. Choose from: {list(DECODER_MODELS.keys())}")
-            self._decoder_model = DECODER_MODELS[decoder]()
+            self._decoder_model_random_reconstructor = DECODER_MODELS[decoder]()
+            self._decoder_model_temporal_reconstructor = DECODER_MODELS[decoder]()
+            self._decoder_model_sensor_forecaster = DECODER_MODELS[decoder]()
         else:
             raise ValueError("Invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
 
-        self._sensor_forecaster = None
-        self._reconstructor = None
-        self.recon_validation_errors = None
-        self.forecast_validation_errors = None
-        # self._sequence_str = self._sequence_model.model_name # sequence model name
-        # self._decoder_str = self._decoder_model.model_name # decoder model name       
+        self.sensor_forecaster = None
+        self.random_reconstructor = None
+        self.temporal_reconstructor = None
+
+        self.random_reconstructor_validation_errors = None
+        self.temporal_reconstructor_validation_errors = None
+        self.sensor_forecaster_validation_errors = None
+        # self._sequence_str = self._sequence_model_random_reconstructor.model_name # sequence model name
+        # self._decoder_str = self._decoder_model_random_reconstructor.model_name # decoder model name       
         # self.sensor_summary = None # information about sensors (a pandas dataframe)
         # self.sensor_data = None # raw sensor data, sensors as rows, timesteps as columns
-        # self.recon_validation_errors = None
-        # self.forecast_validation_errors = None
-        # self._reconstructor = None
+        # self.random_reconstructor_validation_errors = None
+        # self.sensor_forecaster_validation_errors = None
+        # self.random_reconstructor = None
         # self._sensor_forecaster = None
         # self._sc_sensors = None
         # self._sc_data = None
@@ -185,7 +201,7 @@ class SHRED(nn.Module):
     
     def forward(self, x):
         print("Newest Version")
-        return self._reconstructor(x)
+        return self.random_reconstructor(x)
         # Check if fit() method has been called prior
         # if not self._is_fitted:
         #     raise RuntimeError("The SHRED model must be fit before calling recon().")
@@ -261,7 +277,7 @@ class SHRED(nn.Module):
         #         temp = initial_in.clone()
         #         initial_in[0,:-1] = temp[0,1:]
         #         initial_in[0,-1] = torch.tensor(scaled_sensor_forecast)
-        #     device = 'cuda' if next(self._reconstructor.parameters()).is_cuda else 'cpu'
+        #     device = 'cuda' if next(self.random_reconstructor.parameters()).is_cuda else 'cpu'
         #     sensor_measurements_scaled_all = np.array(vals).T # timesteps as columns
         #     sensor_measurements_scaled = sensor_measurements_scaled_all[:,-(end_time_index - start_time_index) - self._lags - 1:]
         # sensor_measurements_unscaled_recon = self._unscale_sensor_data(sensor_measurements_scaled)
@@ -270,7 +286,7 @@ class SHRED(nn.Module):
         # return ReconstructionResult(recon_dict=recon_dict, sensor_measurements=sensor_measurements_unscaled_recon, time= np.arange(start_time, end_time + time_step, time_step))
 
 
-    def fit(self, train_set, valid_set,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
+    def fit(self, train_dataset, valid_dataset,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -329,249 +345,386 @@ class SHRED(nn.Module):
         patience : int, optional
             Number of epochs to wait for improvement before early stopping. Default is 20.
         """
-        ########################################### SHRED RECONSTRUCTOR #################################################
-        recon_train_set = train_set.reconstructor
-        recon_valid_set = valid_set.reconstructor
-        input_size = recon_train_set.X.shape[2] # nsensors + nparams
-        output_size = recon_train_set.Y.shape[1]
-        self._sequence_model.initialize(input_size) # initialize with nsensors
-        self._decoder_model.initialize(self._sequence_model.output_size, output_size) # could pass in entire sequence model
-        self._reconstructor = RECONSTRUCTOR(sequence=self._sequence_model,decoder=self._decoder_model)
-        print("\nFitting Reconstructor...")
-        self.recon_validation_errors = self._reconstructor.fit(model = self._reconstructor, train_dataset = recon_train_set, valid_dataset = recon_valid_set, num_sensors = input_size, output_size = output_size
-                                , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
-        
-        ########################################### SHRED FORECASTER ####################################################
-        if train_set.forecaster is not None:
-            forecast_train_set = train_set.forecaster
-            forecast_valid_set = valid_set.forecaster
-            input_size = forecast_train_set.X.shape[2] # nsensors + nparams
-            output_size = forecast_train_set.Y.shape[1]
+        ########################################### SHRED RANDOM RECONSTRUCTOR #################################################
+        if train_dataset.random_reconstructor_dataset is not None:
+            train_set = train_dataset.random_reconstructor_dataset
+            valid_set = valid_dataset.random_reconstructor_dataset
+            input_size = train_set.X.shape[2] # nsensors + nparams
+            output_size = valid_set.Y.shape[1]
             print('input_size', input_size)
             print('output_size', output_size)
-            self._sequence_model.initialize(input_size)
-            self._decoder_model.initialize(self._sequence_model.output_size, output_size)
+            print('self._sequence_model_random_reconstructor.output_size', self._sequence_model_random_reconstructor.output_size)
+            self._sequence_model_random_reconstructor.initialize(input_size) # initialize with nsensors
+            self._decoder_model_random_reconstructor.initialize(input_size = self._sequence_model_random_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
+            self.random_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_random_reconstructor,decoder=self._decoder_model_random_reconstructor)
+            print("\nFitting Random Reconstructor...")
+            self.random_reconstructor_validation_errors = self.random_reconstructor.fit(model = self.random_reconstructor, train_dataset = train_set, valid_dataset = valid_set,
+                                                                num_sensors = input_size, output_size = output_size
+                                    , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
+        
+
+        ########################################### SHRED TEMPORAL RECONSTRUCTOR #################################################
+        if train_dataset.temporal_reconstructor_dataset is not None:
+            train_set = train_dataset.temporal_reconstructor_dataset
+            valid_set = valid_dataset.temporal_reconstructor_dataset
+            input_size = train_set.X.shape[2] # nsensors + nparams
+            output_size = valid_set.Y.shape[1]
+            print('input_size', input_size)
+            print('output_size', output_size)
+            print('self._sequence_model_temporal_reconstructor.output_size', self._sequence_model_temporal_reconstructor.output_size)
+            self._sequence_model_temporal_reconstructor.initialize(input_size) # initialize with nsensors
+            self._decoder_model_temporal_reconstructor.initialize(input_size = self._sequence_model_temporal_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
+            self.temporal_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_temporal_reconstructor,decoder=self._decoder_model_temporal_reconstructor)
+            print("\nFitting Temporal Reconstructor...")
+            self.temporal_reconstructor_validation_errors = self.temporal_reconstructor.fit(model = self.temporal_reconstructor, train_dataset = train_set, valid_dataset = valid_set,
+                                                                num_sensors = input_size, output_size = output_size
+                                    , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
+        
+        
+        ########################################### SHRED FORECASTER ####################################################
+        if train_dataset.sensor_forecaster_dataset is not None:
+            train_set = train_dataset.sensor_forecaster_dataset
+            valid_set = valid_dataset.sensor_forecaster_dataset
+            input_size = train_set.X.shape[2] # nsensors + nparams
+            output_size = valid_set.Y.shape[1]
+            print('input_size', input_size)
+            print('output_size', output_size)
+            self._sequence_model_sensor_forecaster.initialize(input_size)
+            self._decoder_model_sensor_forecaster.initialize(self._sequence_model_sensor_forecaster.output_size, output_size)
             
-            self._sensor_forecaster = FORECASTER(sequence=self._sequence_model,decoder=self._decoder_model)
-            # self._sensor_forecaster = _SHRED_FORECASTER(model=LSTM without decoder)
-            print("\nFitting Forecaster...")
-            self.forecast_validation_errors =  self._sensor_forecaster.fit(model = self._sensor_forecaster, train_dataset = forecast_train_set, valid_dataset = forecast_valid_set, num_sensors = input_size,
+            self.sensor_forecaster = FORECASTER(sequence=self._sequence_model_sensor_forecaster,decoder=self._decoder_model_sensor_forecaster)
+            # self.sensor_forecaster = _SHRED_FORECASTER(model=LSTM without decoder)
+            print("\nFitting Sensor Forecaster...")
+            self.sensor_forecaster_validation_errors =  self.sensor_forecaster.fit(model = self.sensor_forecaster, train_dataset = train_set, valid_dataset = valid_set, num_sensors = input_size,
                                         output_size = output_size, batch_size = batch_size, num_epochs = num_epochs,
                                         lr = lr, verbose = verbose, patience = patience)
-        self._is_fitted = True
-        result = {
-            'Reconstructor Validation Errors':self.recon_validation_errors,
-            'Forecaster Validation Errors':self.forecast_validation_errors,
-        }
+            
+        result = {}
+        if self.random_reconstructor_validation_errors is not None:
+            result['Random Reconstructor Validation Errors'] = self.random_reconstructor_validation_errors
+        if self.temporal_reconstructor_validation_errors is not None:
+            result['Temporal Reconstructor Validation Errors'] = self.temporal_reconstructor_validation_errors
+        if self.sensor_forecaster_validation_errors is not None:
+            result['Sensor Forecaster Validation Errors'] = self.sensor_forecaster_validation_errors
+
         return result
 
-    def predict(self, start, end, sensor_data = None, sensor_data_time = None):
-        """
-        Takes in a start and end time (required). Optional sensor_data and sensor_data_time can be
-        added to improve forecasts (out-of-sample reconstructions).
-        """
-        # Check if fit() method has been called prior
-        if not self._is_fitted:
-            raise RuntimeError("The SHRED model must be fit before calling recon().")
-        ########################################## VALIDATE USER INPUT ############################################
-        time_step = self._time[1] - self._time[0]
-        if not isinstance(start, (int, np.integer)):
-            raise TypeError(f"Expected 'start' to be an integer, but got {type(start).__name__}.")
-        if not isinstance(end, (int, np.integer)):
-            raise TypeError(f"Expected 'end' to be an integer, but got {type(start).__name__}.")
-        start_time = start # inclusive start time
-        end_time = end # inclusive end time
-        # Check if start time less than or equal to end time
-        if start_time > end_time:
-            raise ValueError(f"Start time ({start_time}) must be less than or equal to end time ({end_time}).")
-        # Check if start time is greater than train data start time + lag time
-        if start_time < self._time[0] + (self._lags * time_step):
-            raise ValueError(f"Start time must be greater or equal to {self._time[0] + (self._lags * time_step)}")
-        # Check if start time is valid 
-        if (start_time - self._time[0])%time_step != 0:
-            raise ValueError(f"Start time ({start_time}) is invalid.")
-        # Check if end time is valid 
-        if (end_time - self._time[0])%time_step != 0:
-            raise ValueError(f"End time ({end_time}) is invalid.")
-        if sensor_data is not None:
-            # Check if time exists
-            if sensor_data_time is None:
-                raise ValueError("The 'sensor_data_time' corresponding to 'sensor_data' does not exist.")
-            # Check if sensor_data same timesteps as time
-            if sensor_data.shape[1] != sensor_data_time.shape[0]:
-                raise ValueError(f"The number of columns in 'sensor_data' ({sensor_data.shape[1]}) must match length of 'time' ({sensor_data_time.shape[0]}).")
-            # Check for expected number of sensors in sensor_data
-            if sensor_data.shape[0] != self.sensor_data.shape[0]:
-                raise ValueError(f"Expected {self.sensor_data.shape[0]} sensors but got {sensor_data.shape[0]} in 'sensor_data'.")
-            if np.any(sensor_data_time % time_step != 0):
-                raise ValueError(f"All values in 'time' must be multiples of {time_step}")
-            if np.any(sensor_data_time <= self._time[-1]):
-                print(f"Warning: Some values in 'time' are less than {self._time[-1]}. Any 'sensor_data' value with a corresponding 'time' value less than {self._time[-1]} will be ignored.")
-            # Scale input sensor data
-            scaled_sensor_data_in = self._scale_sensor_data(sensor_data)
-        if start_time <= self._time[-1]:
-            start_time_index = np.where(self._time == start_time)[0][0]
-        else:
-            start_time_index = (len(self._time) - 1) + int((start_time - self._time[-1])/time_step)
-        end_time_index = int((end_time - start_time) / time_step) + start_time_index
-        scaled_sensor_data = self._scale_sensor_data(self.sensor_data)
-        if end_time_index < len(self._time): # If we don't need forecast at all (ignore argument time and sensor_data)
-            sensor_measurements_scaled = scaled_sensor_data[:,start_time_index - self._lags : end_time_index + 1] # +1 to be inclusive of endpoint, timesteps as columns
-        else: # Forecasting is necessary
-            if start_time_index < len(self._time):
-                sensor_measurements_scaled = scaled_sensor_data[:,start_time_index - self._lags:].T
-            else:
-                sensor_measurements_scaled = scaled_sensor_data[:,-self._lags:].T # get last lag_index number of timesteps, timesteps represented by rows
-            n_forecasts = end_time_index - (len(self._time) - 1)
-            initial_in = sensor_measurements_scaled
-            device = 'cuda' if next(self._sensor_forecaster.parameters()).is_cuda else 'cpu'
-            initial_in = torch.tensor(initial_in, dtype=torch.float32).to(device).unsqueeze(0) # add a dimension 
-            vals = []
-            # append initial sensor data (not forecasted sensor data) to vals
-            for i in range(0, initial_in[0].shape[0]):
-                vals.append(initial_in[0, i,:].detach().cpu().clone().numpy())
-            num_sensors = self.sensor_data.shape[0]
-            time_index_list = np.array([]) # initialize time_index_list
-            for i in range(n_forecasts):
-                if sensor_data is not None:
-                    i_time = self._time[-1] + (i+1)*time_step
-                    time_index_list = np.where(sensor_data_time == i_time)[0]
-                if time_index_list.size > 0: # i_time exists in 'time'
-                    time_index = time_index_list[0]
-                    scaled_sensor_forecast = scaled_sensor_data_in[:,time_index]
-                else: # i_time does not exist in 'time'
-                    scaled_sensor_forecast = self._sensor_forecaster(initial_in).detach().cpu().numpy()
-                vals.append(scaled_sensor_forecast.reshape(num_sensors))
-                temp = initial_in.clone()
-                initial_in[0,:-1] = temp[0,1:]
-                initial_in[0,-1] = torch.tensor(scaled_sensor_forecast)
-            device = 'cuda' if next(self._reconstructor.parameters()).is_cuda else 'cpu'
-            sensor_measurements_scaled_all = np.array(vals).T # timesteps as columns
-            sensor_measurements_scaled = sensor_measurements_scaled_all[:,-(end_time_index - start_time_index) - self._lags - 1:]
-        sensor_measurements_unscaled_recon = self._unscale_sensor_data(sensor_measurements_scaled)
-        # Get reconstructions
-        recon_dict = self.recon(sensor_measurments = sensor_measurements_unscaled_recon)
-        return ReconstructionResult(recon_dict=recon_dict, sensor_measurements=sensor_measurements_unscaled_recon, time= np.arange(start_time, end_time + time_step, time_step))
 
-    def recon(self, sensor_measurments):
-        """
-        Performs full-state reconstructin using only the provided sensor_measurements.
+def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = True):
 
-        Parameters:
-        -----------
-        sensor_measurments : numpy array
-            A numpy array sensor measurements where:
-            - rows represent sensors (see sensor column order with .sensor_summary)
-            - columns represents timesteps, the number of timesteps must be greater than `lag_index`.
-            - ATTENTION: only seansor measurements past the first `lag_index` number of timesteps
-            be reconstructed
-        """
-        sensor_measurments_scaled = self._scale_sensor_data(sensor_measurments).T # timesteps as rows
-        n = sensor_measurments_scaled.shape[0]
-        num_sensors = sensor_measurments_scaled.shape[1] # validate data in using self.num_sensors?
-        data_in = np.zeros((n - self._lags, self._lags, num_sensors))
-        for i in range(len(data_in)):
-            data_in[i] = sensor_measurments_scaled[i:i+self._lags]
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        data_in = torch.tensor(data_in, dtype = torch.float32).to(device)
-        with torch.no_grad():
-            recon = self._reconstructor(data_in)
-        recon_sensor_data_scaled = recon.detach().cpu().numpy()[:,:num_sensors] # timesteps as rows
-        recon_fullstate_data_scaled = recon.detach().cpu().numpy()[:,num_sensors:] # timesteps as rows
-        recon_sensor_data = np.empty_like(recon_sensor_data_scaled.T)
-        for dataset_name, sc in self._sc_sensor_dict.items():
-            indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
-            recon_sensor_data[indices] = sc.inverse_transform(recon_sensor_data_scaled[:,indices]).T # time as columns
-        keys = ['sensors'] + self._data_keys
-        recon_dict = {key: None for key in keys}
-        start_index = 0
-        for key in recon_dict:
-            if key == 'sensors':
-                recon_dict[key] = recon_sensor_data
-            elif self._compressed:
-                u = self._u_dict[key]
-                s = self._s_dict[key]
-                v_scaled = recon_fullstate_data_scaled[:, start_index: start_index + s.shape[0]] # s.shape[0] = number of components
-                v = self._sc_data_dict[key].inverse_transform(v_scaled)
-                svd_recon_flat = (u @ np.diag(s) @ v.T).T # timesteps is represented by rows
-                recon_dict[key] = unflatten(data = svd_recon_flat, spatial_shape=self._data_spatial_shape[key])
-                start_index += s.shape[0]
-            else:
-                ### Compression skipped during fit:
-                ### num rows = timesteps
-                ### num columns = num sensors + spatial_flattened (X1) + ... + spatial_flaxxened (Xn)
-                recon_fullstate_data = self._sc_data_dict[key].inverse_transform(recon_fullstate_data_scaled[:, start_index:start_index + np.prod(self._data_spatial_shape[key])])
-                recon_dict[key] = unflatten(data = recon_fullstate_data, spatial_shape = self._data_spatial_shape[key])
-                start_index += np.prod(self._data_spatial_shape[key])
-        return recon_dict
+    error_df = pd.DataFrame()
 
-    def forecast(self, timesteps, sensor_data = None, sensor_data_time = None):
-        """
-        Forecast the high-dimensional state space `timesteps` into the future.
-        It is a convnience wrapper around `predict(self, start)` for forecasts (out-of-sample reconstructions).
-        """
-        if not self._is_fitted:
-            raise RuntimeError("The SHRED model must be fit before calling forecast().")
-        time_step = self._time[1] - self._time[0]
-        start = self._time[-1] + time_step # first out-of-sample time
-        end = start + (timesteps-1) * time_step # minus one since start is first out-of-sample time
-        return self.predict(start = start, end = end, sensor_data = sensor_data, sensor_data_time = sensor_data_time)
-    
-    def summary(self):
-        """
-        Prints out a summary of the fitted SHRED model.
-        """
-        if not self._is_fitted:
-            raise RuntimeError("The SHRED model must be fit before calling summary().")
-        total_width = 60
-        between_width = 30
-        summary = (
-            f"{'SHRED Model Results':^60}\n"
-            f"{'='*total_width}\n"
+    if shred.random_reconstructor is not None:
+        random_reconstructor_prediction = \
+            shred.random_reconstructor(test_dataset.random_reconstructor_dataset.X).detach().cpu().numpy()
+        random_reconstructor_prediction_postprocess = \
+        data_manager.postprocess(data = random_reconstructor_prediction,
+                                 uncompress = uncompress, unscale = unscale, method = "random_reconstructor")
+        random_reconstructor_truth_postprocess = \
+            data_manager.postprocess(data = test_dataset.random_reconstructor_dataset.Y.detach().cpu().numpy(),
+                                    uncompress = uncompress, unscale = unscale, method = "random_reconstructor")
+        for key in random_reconstructor_prediction_postprocess:
+            error =  l2(
+                torch.tensor(random_reconstructor_truth_postprocess[key]),
+                torch.tensor(random_reconstructor_prediction_postprocess[key])
+            )
+            error_df.loc["random reconstructor", key] = error.item()
+
+
+    if shred.temporal_reconstructor is not None:
+        temporal_reconstructor_prediction = \
+            shred.temporal_reconstructor(test_dataset.temporal_reconstructor_dataset.X).detach().cpu().numpy()
+        temporal_reconstructor_prediction_postprocess = \
+            data_manager.postprocess(data = temporal_reconstructor_prediction,
+                                    uncompress = uncompress, unscale = unscale, method = "temporal_reconstructor")
+        temporal_reconstructor_truth_postprocess = \
+            data_manager.postprocess(data = test_dataset.temporal_reconstructor_dataset.Y.detach().cpu().numpy(),
+                                    uncompress = uncompress, unscale = unscale, method = "temporal_reconstructor")
+        for key in temporal_reconstructor_prediction_postprocess:
+            error = l2(
+                torch.tensor(temporal_reconstructor_truth_postprocess[key]),
+                torch.tensor(temporal_reconstructor_prediction_postprocess[key])
+            )
+            error_df.loc["temporal reconstructor", key] = error.item()
+
+    if shred.sensor_forecaster is not None and shred.temporal_reconstructor is not None:
+        test_size = test_dataset.sensor_forecaster_dataset.X.shape[0]
+        # forecasts sensor measurements in test set
+        sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X)
+        # pads with known sensor measurements in validation set
+        sensor_forecaster_prediction = torch.cat((test_dataset.sensor_forecaster_dataset.X[0,:,:],
+                                                  sensor_forecaster_prediction), dim=0)
+        sensor_forecaster_prediction = sensor_forecaster_prediction.detach().cpu().numpy()
+
+        print('sensor_forecaster_prediction_shape', sensor_forecaster_prediction.shape)
+        
+        lags = test_dataset.sensor_forecaster_dataset.X.shape[1] - 1 # subtract 'current'
+        lagged_sensor_forecaster_prediction = \
+            generate_lagged_sequences_from_sensor_measurements(sensor_forecaster_prediction, lags)
+        lagged_sensor_forecaster_prediction = lagged_sensor_forecaster_prediction[-test_size:,:,:]
+
+        # print('sensor_forecaster_prediction', lagged_sensor_forecaster_prediction[0,:,:])
+        # Convert to PyTorch tensor
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        lagged_sensor_forecaster_prediction = torch.tensor(
+            lagged_sensor_forecaster_prediction, dtype=torch.float32, device=device
         )
-        summary += f"{'Reconstructor':^60}\n"
-        f"{'-'*total_width}\n"
-        summary +=f"{'Sequence:':<{between_width}}{self._reconstructor._sequence_str}\n"
-        summary += f"{'Decoder:':<{between_width}}{self._reconstructor._decoder_str}\n"
-        summary += f"{'Validation Error (L2):':<{between_width}}{self._reconstructor._best_L2_error:.3f}\n"
-        if self._sensor_forecaster is not None:
-            summary += f"{'-'*total_width}\n"
-            summary += f"{'Sensor Forecaster':^60}\n"
-            f"{'-'*total_width}\n"
-            summary += f"{'Sequence:':<{between_width}}{self._sensor_forecaster._sequence_str}\n"
-            summary += f"{'Decoder:':<{between_width}}{self._sensor_forecaster._decoder_str}\n"
-            summary += f"{'Validation Error (L2):':<{between_width}}{self._sensor_forecaster._best_L2_error:.3f}\n"
-        summary += f"{'='*total_width}\n"
-        summary += f"{'No. Observations:':<{between_width}}{len(self._time)}\n"
-        summary += f"{'No. Sensors:':<{between_width}}{self.sensor_data.shape[0]}\n"
-        summary += f"{'Time:':<{between_width}}(start: {self._time[0]}, end: {self._time[-1]}, by: {self._time[1] - self._time[0]})\n"
-        summary += f"{'Lags (timesteps):':<{between_width}}{self._lags}\n"
-    
-        # Check for compression and append the appropriate string
-        if self._compressed:
-            summary += f"{'Compression (components):':<{between_width}}{self._n_components}\n"
-        else:
-            summary += f"{'Compression:':<{between_width}}{self._compressed}\n"
-        summary += f"{'='*total_width}\n"
-        print(summary)
+        print('lagged_sensor_forecaster_prediction', lagged_sensor_forecaster_prediction.shape)
+        forecast_prediction = \
+            shred.temporal_reconstructor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
+        forecast_prediction_postprocess = \
+            data_manager.postprocess(data = forecast_prediction, uncompress = uncompress,
+                                     unscale = unscale, method = "temporal_reconstructor")
+        for key in forecast_prediction_postprocess:
+            error = l2(
+                torch.tensor(temporal_reconstructor_truth_postprocess[key]),
+                torch.tensor(forecast_prediction_postprocess[key])
+            )
+            error_df.loc["forecaster", key] = error.item()
 
-    # Takes in unscaled sensor data with time as columns
-    # Returns scaled sensor data with time as columns
-    def _scale_sensor_data(self, unscaled_sensor_data):
-        scaled_sensor_data = np.empty_like(unscaled_sensor_data)
-        for dataset_name, sc in self._sc_sensor_dict.items():
-            indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
-            scaled_sensor_data[indices] = sc.transform(unscaled_sensor_data[indices].T).T
-        return scaled_sensor_data
+    if shred.sensor_forecaster is not None:
+        sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
+        sensor_forecaster_prediction_postprocess = \
+            data_manager.postprocess(data = sensor_forecaster_prediction,
+                                     uncompress = uncompress, unscale = unscale, method = "sensor_forecaster")
+        sensor_forecaster_truth_postprocess = \
+            data_manager.postprocess(data = test_dataset.sensor_forecaster_dataset.Y.detach().cpu().numpy(),
+                                    uncompress = uncompress, unscale = unscale, method = "sensor_forecaster")
+        for key in sensor_forecaster_prediction_postprocess:
+            error = l2(
+                torch.tensor(sensor_forecaster_truth_postprocess[key]),
+                torch.tensor(sensor_forecaster_prediction_postprocess[key])
+            )
+            error_df.loc["sensor forecaster", key] = error.item()
+
+    return error_df
+
+
+
+
+
+
     
-    # Takes in scaled sensor data with time as columns
-    # Returns unscaled sensor data with time as columns
-    def _unscale_sensor_data(self, scaled_sensor_data):
-        unscaled_sensor_data = np.empty_like(scaled_sensor_data)
-        for dataset_name, sc in self._sc_sensor_dict.items():
-            indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
-            unscaled_sensor_data[indices] = sc.inverse_transform(scaled_sensor_data[indices].T).T
-        return unscaled_sensor_data
+
+
+    
+
+
+
+
+        
+        # test_recons = sc.inverse_transform(shred(test_dataset.X).detach().cpu().numpy())
+        # test_ground_truth = sc.inverse_transform(test_dataset.Y.detach().cpu().numpy())
+        # print('Test Reconstruction Error: ')
+        # print(np.linalg.norm(test_recons - test_ground_truth) / np.linalg.norm(test_ground_truth))
+
+    # def predict(self, start, end, sensor_data = None, sensor_data_time = None):
+    #     """
+    #     Takes in a start and end time (required). Optional sensor_data and sensor_data_time can be
+    #     added to improve forecasts (out-of-sample reconstructions).
+    #     """
+    #     # Check if fit() method has been called prior
+    #     if not self._is_fitted:
+    #         raise RuntimeError("The SHRED model must be fit before calling recon().")
+    #     ########################################## VALIDATE USER INPUT ############################################
+    #     time_step = self._time[1] - self._time[0]
+    #     if not isinstance(start, (int, np.integer)):
+    #         raise TypeError(f"Expected 'start' to be an integer, but got {type(start).__name__}.")
+    #     if not isinstance(end, (int, np.integer)):
+    #         raise TypeError(f"Expected 'end' to be an integer, but got {type(start).__name__}.")
+    #     start_time = start # inclusive start time
+    #     end_time = end # inclusive end time
+    #     # Check if start time less than or equal to end time
+    #     if start_time > end_time:
+    #         raise ValueError(f"Start time ({start_time}) must be less than or equal to end time ({end_time}).")
+    #     # Check if start time is greater than train data start time + lag time
+    #     if start_time < self._time[0] + (self._lags * time_step):
+    #         raise ValueError(f"Start time must be greater or equal to {self._time[0] + (self._lags * time_step)}")
+    #     # Check if start time is valid 
+    #     if (start_time - self._time[0])%time_step != 0:
+    #         raise ValueError(f"Start time ({start_time}) is invalid.")
+    #     # Check if end time is valid 
+    #     if (end_time - self._time[0])%time_step != 0:
+    #         raise ValueError(f"End time ({end_time}) is invalid.")
+    #     if sensor_data is not None:
+    #         # Check if time exists
+    #         if sensor_data_time is None:
+    #             raise ValueError("The 'sensor_data_time' corresponding to 'sensor_data' does not exist.")
+    #         # Check if sensor_data same timesteps as time
+    #         if sensor_data.shape[1] != sensor_data_time.shape[0]:
+    #             raise ValueError(f"The number of columns in 'sensor_data' ({sensor_data.shape[1]}) must match length of 'time' ({sensor_data_time.shape[0]}).")
+    #         # Check for expected number of sensors in sensor_data
+    #         if sensor_data.shape[0] != self.sensor_data.shape[0]:
+    #             raise ValueError(f"Expected {self.sensor_data.shape[0]} sensors but got {sensor_data.shape[0]} in 'sensor_data'.")
+    #         if np.any(sensor_data_time % time_step != 0):
+    #             raise ValueError(f"All values in 'time' must be multiples of {time_step}")
+    #         if np.any(sensor_data_time <= self._time[-1]):
+    #             print(f"Warning: Some values in 'time' are less than {self._time[-1]}. Any 'sensor_data' value with a corresponding 'time' value less than {self._time[-1]} will be ignored.")
+    #         # Scale input sensor data
+    #         scaled_sensor_data_in = self._scale_sensor_data(sensor_data)
+    #     if start_time <= self._time[-1]:
+    #         start_time_index = np.where(self._time == start_time)[0][0]
+    #     else:
+    #         start_time_index = (len(self._time) - 1) + int((start_time - self._time[-1])/time_step)
+    #     end_time_index = int((end_time - start_time) / time_step) + start_time_index
+    #     scaled_sensor_data = self._scale_sensor_data(self.sensor_data)
+    #     if end_time_index < len(self._time): # If we don't need forecast at all (ignore argument time and sensor_data)
+    #         sensor_measurements_scaled = scaled_sensor_data[:,start_time_index - self._lags : end_time_index + 1] # +1 to be inclusive of endpoint, timesteps as columns
+    #     else: # Forecasting is necessary
+    #         if start_time_index < len(self._time):
+    #             sensor_measurements_scaled = scaled_sensor_data[:,start_time_index - self._lags:].T
+    #         else:
+    #             sensor_measurements_scaled = scaled_sensor_data[:,-self._lags:].T # get last lag_index number of timesteps, timesteps represented by rows
+    #         n_forecasts = end_time_index - (len(self._time) - 1)
+    #         initial_in = sensor_measurements_scaled
+    #         device = 'cuda' if next(self.sensor_forecaster.parameters()).is_cuda else 'cpu'
+    #         initial_in = torch.tensor(initial_in, dtype=torch.float32).to(device).unsqueeze(0) # add a dimension 
+    #         vals = []
+    #         # append initial sensor data (not forecasted sensor data) to vals
+    #         for i in range(0, initial_in[0].shape[0]):
+    #             vals.append(initial_in[0, i,:].detach().cpu().clone().numpy())
+    #         num_sensors = self.sensor_data.shape[0]
+    #         time_index_list = np.array([]) # initialize time_index_list
+    #         for i in range(n_forecasts):
+    #             if sensor_data is not None:
+    #                 i_time = self._time[-1] + (i+1)*time_step
+    #                 time_index_list = np.where(sensor_data_time == i_time)[0]
+    #             if time_index_list.size > 0: # i_time exists in 'time'
+    #                 time_index = time_index_list[0]
+    #                 scaled_sensor_forecast = scaled_sensor_data_in[:,time_index]
+    #             else: # i_time does not exist in 'time'
+    #                 scaled_sensor_forecast = self.sensor_forecaster(initial_in).detach().cpu().numpy()
+    #             vals.append(scaled_sensor_forecast.reshape(num_sensors))
+    #             temp = initial_in.clone()
+    #             initial_in[0,:-1] = temp[0,1:]
+    #             initial_in[0,-1] = torch.tensor(scaled_sensor_forecast)
+    #         device = 'cuda' if next(self.random_reconstructor.parameters()).is_cuda else 'cpu'
+    #         sensor_measurements_scaled_all = np.array(vals).T # timesteps as columns
+    #         sensor_measurements_scaled = sensor_measurements_scaled_all[:,-(end_time_index - start_time_index) - self._lags - 1:]
+    #     sensor_measurements_unscaled_recon = self._unscale_sensor_data(sensor_measurements_scaled)
+    #     # Get reconstructions
+    #     recon_dict = self.recon(sensor_measurments = sensor_measurements_unscaled_recon)
+    #     return ReconstructionResult(recon_dict=recon_dict, sensor_measurements=sensor_measurements_unscaled_recon, time= np.arange(start_time, end_time + time_step, time_step))
+
+    # def recon(self, sensor_measurments):
+    #     """
+    #     Performs full-state reconstructin using only the provided sensor_measurements.
+
+    #     Parameters:
+    #     -----------
+    #     sensor_measurments : numpy array
+    #         A numpy array sensor measurements where:
+    #         - rows represent sensors (see sensor column order with .sensor_summary)
+    #         - columns represents timesteps, the number of timesteps must be greater than `lag_index`.
+    #         - ATTENTION: only seansor measurements past the first `lag_index` number of timesteps
+    #         be reconstructed
+    #     """
+    #     sensor_measurments_scaled = self._scale_sensor_data(sensor_measurments).T # timesteps as rows
+    #     n = sensor_measurments_scaled.shape[0]
+    #     num_sensors = sensor_measurments_scaled.shape[1] # validate data in using self.num_sensors?
+    #     data_in = np.zeros((n - self._lags, self._lags, num_sensors))
+    #     for i in range(len(data_in)):
+    #         data_in[i] = sensor_measurments_scaled[i:i+self._lags]
+    #     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    #     data_in = torch.tensor(data_in, dtype = torch.float32).to(device)
+    #     with torch.no_grad():
+    #         recon = self.random_reconstructor(data_in)
+    #     recon_sensor_data_scaled = recon.detach().cpu().numpy()[:,:num_sensors] # timesteps as rows
+    #     recon_fullstate_data_scaled = recon.detach().cpu().numpy()[:,num_sensors:] # timesteps as rows
+    #     recon_sensor_data = np.empty_like(recon_sensor_data_scaled.T)
+    #     for dataset_name, sc in self._sc_sensor_dict.items():
+    #         indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
+    #         recon_sensor_data[indices] = sc.inverse_transform(recon_sensor_data_scaled[:,indices]).T # time as columns
+    #     keys = ['sensors'] + self._data_keys
+    #     recon_dict = {key: None for key in keys}
+    #     start_index = 0
+    #     for key in recon_dict:
+    #         if key == 'sensors':
+    #             recon_dict[key] = recon_sensor_data
+    #         elif self._compressed:
+    #             u = self._u_dict[key]
+    #             s = self._s_dict[key]
+    #             v_scaled = recon_fullstate_data_scaled[:, start_index: start_index + s.shape[0]] # s.shape[0] = number of components
+    #             v = self._sc_data_dict[key].inverse_transform(v_scaled)
+    #             svd_recon_flat = (u @ np.diag(s) @ v.T).T # timesteps is represented by rows
+    #             recon_dict[key] = unflatten(data = svd_recon_flat, spatial_shape=self._data_spatial_shape[key])
+    #             start_index += s.shape[0]
+    #         else:
+    #             ### Compression skipped during fit:
+    #             ### num rows = timesteps
+    #             ### num columns = num sensors + spatial_flattened (X1) + ... + spatial_flaxxened (Xn)
+    #             recon_fullstate_data = self._sc_data_dict[key].inverse_transform(recon_fullstate_data_scaled[:, start_index:start_index + np.prod(self._data_spatial_shape[key])])
+    #             recon_dict[key] = unflatten(data = recon_fullstate_data, spatial_shape = self._data_spatial_shape[key])
+    #             start_index += np.prod(self._data_spatial_shape[key])
+    #     return recon_dict
+
+    # def forecast(self, timesteps, sensor_data = None, sensor_data_time = None):
+    #     """
+    #     Forecast the high-dimensional state space `timesteps` into the future.
+    #     It is a convnience wrapper around `predict(self, start)` for forecasts (out-of-sample reconstructions).
+    #     """
+    #     if not self._is_fitted:
+    #         raise RuntimeError("The SHRED model must be fit before calling forecast().")
+    #     time_step = self._time[1] - self._time[0]
+    #     start = self._time[-1] + time_step # first out-of-sample time
+    #     end = start + (timesteps-1) * time_step # minus one since start is first out-of-sample time
+    #     return self.predict(start = start, end = end, sensor_data = sensor_data, sensor_data_time = sensor_data_time)
+    
+    # def summary(self):
+    #     """
+    #     Prints out a summary of the fitted SHRED model.
+    #     """
+    #     if not self._is_fitted:
+    #         raise RuntimeError("The SHRED model must be fit before calling summary().")
+    #     total_width = 60
+    #     between_width = 30
+    #     summary = (
+    #         f"{'SHRED Model Results':^60}\n"
+    #         f"{'='*total_width}\n"
+    #     )
+    #     summary += f"{'Reconstructor':^60}\n"
+    #     f"{'-'*total_width}\n"
+    #     summary +=f"{'Sequence:':<{between_width}}{self.random_reconstructor._sequence_str}\n"
+    #     summary += f"{'Decoder:':<{between_width}}{self.random_reconstructor._decoder_str}\n"
+    #     summary += f"{'Validation Error (L2):':<{between_width}}{self.random_reconstructor._best_L2_error:.3f}\n"
+    #     if self.sensor_forecaster is not None:
+    #         summary += f"{'-'*total_width}\n"
+    #         summary += f"{'Sensor Forecaster':^60}\n"
+    #         f"{'-'*total_width}\n"
+    #         summary += f"{'Sequence:':<{between_width}}{self.sensor_forecaster._sequence_str}\n"
+    #         summary += f"{'Decoder:':<{between_width}}{self.sensor_forecaster._decoder_str}\n"
+    #         summary += f"{'Validation Error (L2):':<{between_width}}{self.sensor_forecaster._best_L2_error:.3f}\n"
+    #     summary += f"{'='*total_width}\n"
+    #     summary += f"{'No. Observations:':<{between_width}}{len(self._time)}\n"
+    #     summary += f"{'No. Sensors:':<{between_width}}{self.sensor_data.shape[0]}\n"
+    #     summary += f"{'Time:':<{between_width}}(start: {self._time[0]}, end: {self._time[-1]}, by: {self._time[1] - self._time[0]})\n"
+    #     summary += f"{'Lags (timesteps):':<{between_width}}{self._lags}\n"
+    
+    #     # Check for compression and append the appropriate string
+    #     if self._compressed:
+    #         summary += f"{'Compression (components):':<{between_width}}{self._n_components}\n"
+    #     else:
+    #         summary += f"{'Compression:':<{between_width}}{self._compressed}\n"
+    #     summary += f"{'='*total_width}\n"
+    #     print(summary)
+
+    # # Takes in unscaled sensor data with time as columns
+    # # Returns scaled sensor data with time as columns
+    # def _scale_sensor_data(self, unscaled_sensor_data):
+    #     scaled_sensor_data = np.empty_like(unscaled_sensor_data)
+    #     for dataset_name, sc in self._sc_sensor_dict.items():
+    #         indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
+    #         scaled_sensor_data[indices] = sc.transform(unscaled_sensor_data[indices].T).T
+    #     return scaled_sensor_data
+    
+    # # Takes in scaled sensor data with time as columns
+    # # Returns unscaled sensor data with time as columns
+    # def _unscale_sensor_data(self, scaled_sensor_data):
+    #     unscaled_sensor_data = np.empty_like(scaled_sensor_data)
+    #     for dataset_name, sc in self._sc_sensor_dict.items():
+    #         indices = self.sensor_summary[self.sensor_summary['dataset'] == dataset_name]['row index']
+    #         unscaled_sensor_data[indices] = sc.inverse_transform(scaled_sensor_data[indices].T).T
+    #     return unscaled_sensor_data
 
 
 # # class _SHRED_RECONSTRUCTOR(nn.Module):

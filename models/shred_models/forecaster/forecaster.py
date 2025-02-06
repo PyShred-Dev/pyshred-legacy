@@ -1,10 +1,14 @@
 # class _SHRED_RECONSTRUCTOR(nn.Module):
+# import sys
+# import pandas as pd
 import torch.nn as nn
 # from sklearn.utils.extmath import randomized_svd
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+# import pickle
 import torch
+from processing.utils import l2
 
 class FORECASTER(nn.Module):
     """
@@ -52,7 +56,7 @@ class FORECASTER(nn.Module):
         output = self._decoder_model(h_out)
         return output
     
-    def fit(self,model, train_dataset, valid_dataset, batch_size, num_epochs, lr, verbose, patience, num_sensors = None, output_size = None):
+    def fit(self,model, train_dataset, valid_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -85,6 +89,7 @@ class FORECASTER(nn.Module):
         val_error_list = []
         patience_counter = 0
         best_params = model.state_dict()
+        best_val_error = float('inf')  # Initialize with a large value
         for epoch in range(1, num_epochs + 1):
             model.train()
             running_loss = 0.0
@@ -98,7 +103,7 @@ class FORECASTER(nn.Module):
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
-                train_error = torch.linalg.norm(outputs - target) / torch.linalg.norm(target)
+                train_error = l2(target, outputs)
                 running_error += train_error.item()
 
                 if verbose:
@@ -112,7 +117,7 @@ class FORECASTER(nn.Module):
             with torch.no_grad():
                 val_outputs = model(valid_dataset.X)
                 val_loss = criterion(val_outputs, valid_dataset.Y).item()
-                val_error = torch.linalg.norm(val_outputs - valid_dataset.Y) / torch.linalg.norm(valid_dataset.Y)
+                val_error = l2(valid_dataset.Y, val_outputs)
                 val_error = val_error.item()
                 val_error_list.append(val_error)
 
@@ -125,20 +130,19 @@ class FORECASTER(nn.Module):
                 })
                 pbar.close()
 
-            if patience is not None:
-                if val_error == torch.min(torch.tensor(val_error_list)):
-                    patience_counter = 0
-                    self._best_L2_error = val_error
-                    best_params = model.state_dict()
-                else:
-                    patience_counter += 1
-                if patience_counter == patience:
-                    print("Early stopping triggered: patience threshold reached.")
-                    model.load_state_dict(best_params)
-                    return torch.tensor(val_error_list).cpu()
-        
-        if patience is None:
-            self._best_L2_error = val_error
+            # Update best model weights if the validation error improves
+            if val_error < best_val_error:
+                best_val_error = val_error
+                best_params = model.state_dict()  # Save best model parameters
+                self._best_L2_error = val_error
+                patience_counter = 0  # Reset patience counter if improvement occurs
+            else:
+                patience_counter += 1
+
+            # Early stopping logic
+            if patience is not None and patience_counter == patience:
+                print("Early stopping triggered: patience threshold reached.")
+                break  # Exit training loop
 
         model.load_state_dict(best_params)
         return torch.tensor(val_error_list).detach().cpu().numpy()
