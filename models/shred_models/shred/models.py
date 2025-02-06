@@ -345,6 +345,7 @@ class SHRED(nn.Module):
         patience : int, optional
             Number of epochs to wait for improvement before early stopping. Default is 20.
         """
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         ########################################### SHRED RANDOM RECONSTRUCTOR #################################################
         if train_dataset.random_reconstructor_dataset is not None:
             train_set = train_dataset.random_reconstructor_dataset
@@ -355,8 +356,11 @@ class SHRED(nn.Module):
             print('output_size', output_size)
             print('self._sequence_model_random_reconstructor.output_size', self._sequence_model_random_reconstructor.output_size)
             self._sequence_model_random_reconstructor.initialize(input_size) # initialize with nsensors
+            self._sequence_model_random_reconstructor.to(device)
             self._decoder_model_random_reconstructor.initialize(input_size = self._sequence_model_random_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
-            self.random_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_random_reconstructor,decoder=self._decoder_model_random_reconstructor)
+            self._decoder_model_random_reconstructor.to(device)
+            self.random_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_random_reconstructor,
+                                                      decoder=self._decoder_model_random_reconstructor).to(device)
             print("\nFitting Random Reconstructor...")
             self.random_reconstructor_validation_errors = self.random_reconstructor.fit(model = self.random_reconstructor, train_dataset = train_set, valid_dataset = valid_set,
                                                                 num_sensors = input_size, output_size = output_size
@@ -373,8 +377,11 @@ class SHRED(nn.Module):
             print('output_size', output_size)
             print('self._sequence_model_temporal_reconstructor.output_size', self._sequence_model_temporal_reconstructor.output_size)
             self._sequence_model_temporal_reconstructor.initialize(input_size) # initialize with nsensors
+            self._sequence_model_temporal_reconstructor.to(device)
             self._decoder_model_temporal_reconstructor.initialize(input_size = self._sequence_model_temporal_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
-            self.temporal_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_temporal_reconstructor,decoder=self._decoder_model_temporal_reconstructor)
+            self._decoder_model_temporal_reconstructor.to(device)
+            self.temporal_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_temporal_reconstructor,
+                                                        decoder=self._decoder_model_temporal_reconstructor).to(device)
             print("\nFitting Temporal Reconstructor...")
             self.temporal_reconstructor_validation_errors = self.temporal_reconstructor.fit(model = self.temporal_reconstructor, train_dataset = train_set, valid_dataset = valid_set,
                                                                 num_sensors = input_size, output_size = output_size
@@ -390,9 +397,11 @@ class SHRED(nn.Module):
             print('input_size', input_size)
             print('output_size', output_size)
             self._sequence_model_sensor_forecaster.initialize(input_size)
+            self._sequence_model_sensor_forecaster.to(device)
             self._decoder_model_sensor_forecaster.initialize(self._sequence_model_sensor_forecaster.output_size, output_size)
-            
-            self.sensor_forecaster = FORECASTER(sequence=self._sequence_model_sensor_forecaster,decoder=self._decoder_model_sensor_forecaster)
+            self._decoder_model_sensor_forecaster.to(device)
+            self.sensor_forecaster = FORECASTER(sequence=self._sequence_model_sensor_forecaster,
+                                                decoder=self._decoder_model_sensor_forecaster).to(device)
             # self.sensor_forecaster = _SHRED_FORECASTER(model=LSTM without decoder)
             print("\nFitting Sensor Forecaster...")
             self.sensor_forecaster_validation_errors =  self.sensor_forecaster.fit(model = self.sensor_forecaster, train_dataset = train_set, valid_dataset = valid_set, num_sensors = input_size,
