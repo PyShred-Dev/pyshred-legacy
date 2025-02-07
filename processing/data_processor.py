@@ -190,11 +190,11 @@ class SHREDDataProcessor:
             data = self.scaler[method].inverse_transform(data)
 
         # check if compression is None
-        if method != 'sensor_forecaster':
+        if method == 'predictor' or method == 'reconstructor':
             if self.right_singular_values.get(method) is not None and uncompress is True:
                 data = data @ self.right_singular_values.get(method)
                 data = self.scaler_before_svd[method].inverse_transform(data)
-                data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
+            data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
         return data
 
 
