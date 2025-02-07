@@ -172,6 +172,8 @@ class SHREDDataManager:
         X_val_sensor_forecaster, y_val_sensor_forecaster = None, None
         X_test_sensor_forecaster, y_test_sensor_forecaster = None, None
 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         # Process random reconstructor datasets
         if 'reconstructor' in self.METHODS[self.method]:
             for dataset_dict in self.reconstructor:
@@ -184,6 +186,13 @@ class SHREDDataManager:
                 X_test_reconstructor, y_test_reconstructor = concatenate_datasets(
                     X_test_reconstructor, y_test_reconstructor, dataset_dict['test'][0], dataset_dict['test'][1]
                 )
+            # Convert data to torch tensors and move to the specified device
+            X_train_reconstructor = torch.tensor(X_train_reconstructor, dtype=torch.float32, device=device)
+            y_train_reconstructor = torch.tensor(y_train_reconstructor, dtype=torch.float32, device=device)
+            X_val_reconstructor = torch.tensor(X_val_reconstructor, dtype=torch.float32, device=device)
+            y_val_reconstructor = torch.tensor(y_val_reconstructor, dtype=torch.float32, device=device)
+            X_test_reconstructor = torch.tensor(X_test_reconstructor, dtype=torch.float32, device=device)
+            y_test_reconstructor = torch.tensor(y_test_reconstructor, dtype=torch.float32, device=device)
 
         # Process random reconstructor datasets
         if 'predictor' in self.METHODS[self.method]:
@@ -197,6 +206,12 @@ class SHREDDataManager:
                 X_test_predictor, y_test_predictor = concatenate_datasets(
                     X_test_predictor, y_test_predictor, dataset_dict['test'][0], dataset_dict['test'][1]
                 )
+            X_train_predictor = torch.tensor(X_train_predictor, dtype=torch.float32, device=device)
+            y_train_predictor = torch.tensor(y_train_predictor, dtype=torch.float32, device=device)
+            X_val_predictor = torch.tensor(X_val_predictor, dtype=torch.float32, device=device)
+            y_val_predictor = torch.tensor(y_val_predictor, dtype=torch.float32, device=device)
+            X_test_predictor = torch.tensor(X_test_predictor, dtype=torch.float32, device=device)
+            y_test_predictor = torch.tensor(y_test_predictor, dtype=torch.float32, device=device)
 
 
         # Process forecastor datasets
@@ -211,32 +226,12 @@ class SHREDDataManager:
                 X_test_sensor_forecaster, y_test_sensor_forecaster = concatenate_datasets(
                     X_test_sensor_forecaster, y_test_sensor_forecaster, dataset_dict['test'][0], dataset_dict['test'][1]
                 )
-
-
-        # Create TimeSeriesDataset and SHREDDataset objects
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # Convert data to torch tensors and move to the specified device
-        X_train_reconstructor = torch.tensor(X_train_reconstructor, dtype=torch.float32, device=device)
-        y_train_reconstructor = torch.tensor(y_train_reconstructor, dtype=torch.float32, device=device)
-        X_val_reconstructor = torch.tensor(X_val_reconstructor, dtype=torch.float32, device=device)
-        y_val_reconstructor = torch.tensor(y_val_reconstructor, dtype=torch.float32, device=device)
-        X_test_reconstructor = torch.tensor(X_test_reconstructor, dtype=torch.float32, device=device)
-        y_test_reconstructor = torch.tensor(y_test_reconstructor, dtype=torch.float32, device=device)
-
-        X_train_predictor = torch.tensor(X_train_predictor, dtype=torch.float32, device=device)
-        y_train_predictor = torch.tensor(y_train_predictor, dtype=torch.float32, device=device)
-        X_val_predictor = torch.tensor(X_val_predictor, dtype=torch.float32, device=device)
-        y_val_predictor = torch.tensor(y_val_predictor, dtype=torch.float32, device=device)
-        X_test_predictor = torch.tensor(X_test_predictor, dtype=torch.float32, device=device)
-        y_test_predictor = torch.tensor(y_test_predictor, dtype=torch.float32, device=device)
-
-        X_train_sensor_forecaster = torch.tensor(X_train_sensor_forecaster, dtype=torch.float32, device=device)
-        y_train_sensor_forecaster = torch.tensor(y_train_sensor_forecaster, dtype=torch.float32, device=device)
-        X_val_sensor_forecaster = torch.tensor(X_val_sensor_forecaster, dtype=torch.float32, device=device)
-        y_val_sensor_forecaster = torch.tensor(y_val_sensor_forecaster, dtype=torch.float32, device=device)
-        X_test_sensor_forecaster = torch.tensor(X_test_sensor_forecaster, dtype=torch.float32, device=device)
-        y_test_sensor_forecaster = torch.tensor(y_test_sensor_forecaster, dtype=torch.float32, device=device)
+            X_train_sensor_forecaster = torch.tensor(X_train_sensor_forecaster, dtype=torch.float32, device=device)
+            y_train_sensor_forecaster = torch.tensor(y_train_sensor_forecaster, dtype=torch.float32, device=device)
+            X_val_sensor_forecaster = torch.tensor(X_val_sensor_forecaster, dtype=torch.float32, device=device)
+            y_val_sensor_forecaster = torch.tensor(y_val_sensor_forecaster, dtype=torch.float32, device=device)
+            X_test_sensor_forecaster = torch.tensor(X_test_sensor_forecaster, dtype=torch.float32, device=device)
+            y_test_sensor_forecaster = torch.tensor(y_test_sensor_forecaster, dtype=torch.float32, device=device)
 
         # Create TimeSeriesDataset objects
         train_reconstructor_dataset = TimeSeriesDataset(X_train_reconstructor, y_train_reconstructor)
@@ -246,7 +241,6 @@ class SHREDDataManager:
         train_predictor_dataset = TimeSeriesDataset(X_train_predictor, y_train_predictor)
         val_predictor_dataset = TimeSeriesDataset(X_val_predictor, y_val_predictor)
         test_predictor_dataset = TimeSeriesDataset(X_test_predictor, y_test_predictor)
-
 
         train_sensor_forecaster_dataset = TimeSeriesDataset(X_train_sensor_forecaster, y_train_sensor_forecaster)
         val_sensor_forecaster_dataset = TimeSeriesDataset(X_val_sensor_forecaster, y_val_sensor_forecaster)
