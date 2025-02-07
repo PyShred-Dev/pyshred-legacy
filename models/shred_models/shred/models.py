@@ -410,11 +410,11 @@ class SHRED():
             
         result = {}
         if self.reconstructor_validation_errors is not None:
-            result['Reconstruction Validation Errors'] = self.reconstructor_validation_errors
+            result['reconstruction_val_errors'] = self.reconstructor_validation_errors
         if self.predictor_validation_errors is not None:
-            result['Temporal Reconstructor Validation Errors'] = self.predictor_validation_errors
+            result['prediction_val_errors'] = self.predictor_validation_errors
         if self.sensor_forecaster_validation_errors is not None:
-            result['Sensor Forecaster Validation Errors'] = self.sensor_forecaster_validation_errors
+            result['sensor_forecast_val_errors'] = self.sensor_forecaster_validation_errors
 
         return result
 
@@ -445,7 +445,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
                 torch.tensor(reconstructor_truth_postprocess[key]),
                 torch.tensor(reconstructor_prediction_postprocess[key])
             )
-            error_df.loc["Reconstruction", key] = error.item()
+            error_df.loc["reconstruction", key] = error.item()
 
 
     if shred.predictor is not None:
@@ -462,7 +462,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
                 torch.tensor(predictor_truth_postprocess[key]),
                 torch.tensor(predictor_prediction_postprocess[key])
             )
-            error_df.loc["temporal reconstructor", key] = error.item()
+            error_df.loc["prediction", key] = error.item()
 
     if shred.sensor_forecaster is not None and shred.predictor is not None:
         test_size = test_dataset.sensor_forecaster_dataset.X.shape[0]
@@ -497,7 +497,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
                 torch.tensor(predictor_truth_postprocess[key]),
                 torch.tensor(forecast_prediction_postprocess[key])
             )
-            error_df.loc["forecaster", key] = error.item()
+            error_df.loc["forecast", key] = error.item()
 
     if shred.sensor_forecaster is not None:
         sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
@@ -512,7 +512,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
                 torch.tensor(sensor_forecaster_truth_postprocess[key]),
                 torch.tensor(sensor_forecaster_prediction_postprocess[key])
             )
-            error_df.loc["sensor forecaster", key] = error.item()
+            error_df.loc["sensor_forecast", key] = error.item()
 
     return error_df
 
