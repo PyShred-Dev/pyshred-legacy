@@ -172,6 +172,16 @@ class SHREDDataManager:
         X_val_sensor_forecaster, y_val_sensor_forecaster = None, None
         X_test_sensor_forecaster, y_test_sensor_forecaster = None, None
 
+        train_reconstructor_dataset = None
+        val_reconstructor_dataset = None
+        test_reconstructor_dataset = None
+        train_predictor_dataset = None
+        val_predictor_dataset = None
+        test_predictor_dataset = None
+        train_sensor_forecaster_dataset = None
+        val_sensor_forecaster_dataset = None
+        test_sensor_forecaster_dataset = None
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Process random reconstructor datasets
@@ -193,7 +203,11 @@ class SHREDDataManager:
             y_val_reconstructor = torch.tensor(y_val_reconstructor, dtype=torch.float32, device=device)
             X_test_reconstructor = torch.tensor(X_test_reconstructor, dtype=torch.float32, device=device)
             y_test_reconstructor = torch.tensor(y_test_reconstructor, dtype=torch.float32, device=device)
-
+            # Create TimeSeriesDataset objects
+            train_reconstructor_dataset = TimeSeriesDataset(X_train_reconstructor, y_train_reconstructor)
+            val_reconstructor_dataset = TimeSeriesDataset(X_val_reconstructor, y_val_reconstructor)
+            test_reconstructor_dataset = TimeSeriesDataset(X_test_reconstructor, y_test_reconstructor)
+        
         # Process random reconstructor datasets
         if 'predictor' in self.METHODS[self.method]:
             for dataset_dict in self.predictor:
@@ -212,7 +226,9 @@ class SHREDDataManager:
             y_val_predictor = torch.tensor(y_val_predictor, dtype=torch.float32, device=device)
             X_test_predictor = torch.tensor(X_test_predictor, dtype=torch.float32, device=device)
             y_test_predictor = torch.tensor(y_test_predictor, dtype=torch.float32, device=device)
-
+            train_predictor_dataset = TimeSeriesDataset(X_train_predictor, y_train_predictor)
+            val_predictor_dataset = TimeSeriesDataset(X_val_predictor, y_val_predictor)
+            test_predictor_dataset = TimeSeriesDataset(X_test_predictor, y_test_predictor)
 
         # Process forecastor datasets
         if 'sensor_forecaster' in self.METHODS[self.method]:
@@ -232,19 +248,9 @@ class SHREDDataManager:
             y_val_sensor_forecaster = torch.tensor(y_val_sensor_forecaster, dtype=torch.float32, device=device)
             X_test_sensor_forecaster = torch.tensor(X_test_sensor_forecaster, dtype=torch.float32, device=device)
             y_test_sensor_forecaster = torch.tensor(y_test_sensor_forecaster, dtype=torch.float32, device=device)
-
-        # Create TimeSeriesDataset objects
-        train_reconstructor_dataset = TimeSeriesDataset(X_train_reconstructor, y_train_reconstructor)
-        val_reconstructor_dataset = TimeSeriesDataset(X_val_reconstructor, y_val_reconstructor)
-        test_reconstructor_dataset = TimeSeriesDataset(X_test_reconstructor, y_test_reconstructor)
-
-        train_predictor_dataset = TimeSeriesDataset(X_train_predictor, y_train_predictor)
-        val_predictor_dataset = TimeSeriesDataset(X_val_predictor, y_val_predictor)
-        test_predictor_dataset = TimeSeriesDataset(X_test_predictor, y_test_predictor)
-
-        train_sensor_forecaster_dataset = TimeSeriesDataset(X_train_sensor_forecaster, y_train_sensor_forecaster)
-        val_sensor_forecaster_dataset = TimeSeriesDataset(X_val_sensor_forecaster, y_val_sensor_forecaster)
-        test_sensor_forecaster_dataset = TimeSeriesDataset(X_test_sensor_forecaster, y_test_sensor_forecaster)
+            train_sensor_forecaster_dataset = TimeSeriesDataset(X_train_sensor_forecaster, y_train_sensor_forecaster)
+            val_sensor_forecaster_dataset = TimeSeriesDataset(X_val_sensor_forecaster, y_val_sensor_forecaster)
+            test_sensor_forecaster_dataset = TimeSeriesDataset(X_test_sensor_forecaster, y_test_sensor_forecaster)
 
         SHRED_train_dataset = SHREDDataset(train_reconstructor_dataset, train_predictor_dataset, train_sensor_forecaster_dataset)
         SHRED_val_dataset = SHREDDataset(val_reconstructor_dataset, val_predictor_dataset, val_sensor_forecaster_dataset)
