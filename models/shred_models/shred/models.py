@@ -235,7 +235,7 @@ class SHRED():
         """
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         ########################################### SHRED Reconstructor #################################################
-        if train_dataset.reconstructor_dataset is not None:
+        if hasattr(train_dataset, "reconstructor_dataset"):
             train_set = train_dataset.reconstructor_dataset
             val_set = val_dataset.reconstructor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
@@ -253,7 +253,7 @@ class SHRED():
         
 
         ########################################### SHRED Predictor #################################################
-        if train_dataset.predictor_dataset is not None:
+        if hasattr(train_dataset, "predictor_datasett"):
             train_set = train_dataset.predictor_dataset
             val_set = val_dataset.predictor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
@@ -271,7 +271,7 @@ class SHRED():
         
         
         ########################################### SHRED Sensor Forecaster ####################################################
-        if train_dataset.sensor_forecaster_dataset is not None:
+        if hasattr(train_dataset, "sensor_forecaster_dataset"):
             train_set = train_dataset.sensor_forecaster_dataset
             val_set = val_dataset.sensor_forecaster_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
