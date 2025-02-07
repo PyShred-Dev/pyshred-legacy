@@ -253,7 +253,7 @@ class SHRED():
         
 
         ########################################### SHRED Predictor #################################################
-        if hasattr(train_dataset, "predictor_datasett"):
+        if hasattr(train_dataset, "predictor_dataset"):
             train_set = train_dataset.predictor_dataset
             val_set = val_dataset.predictor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
