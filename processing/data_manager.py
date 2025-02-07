@@ -266,7 +266,7 @@ class SHREDDataManager:
             field_spatial_dim = data_processor.Y_spatial_dim
             field_data = data[:, start_index:start_index+field_spatial_dim]
             if isinstance(data, torch.Tensor):
-                field_data = field_data.cpu().numpy()
+                field_data = field_data.detach().cpu().numpy()
             start_index = field_spatial_dim + start_index
             field_data = data_processor.inverse_transform(field_data, uncompress, unscale, method)
             results[data_processor.id] = field_data
