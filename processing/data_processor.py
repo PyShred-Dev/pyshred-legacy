@@ -207,7 +207,7 @@ class SHREDDataProcessor:
 
 
 
-    def generate_X(self, end, measurements, time):
+    def generate_X(self, end, measurements, time, method):
         """
         Generates sensor measurements from time = 0
         to time = end. Uses given measurements as
@@ -225,12 +225,12 @@ class SHREDDataProcessor:
             for i in range(len(time)):
                 if time[i] < complete_measurements.shape[0]:
                     complete_measurements[time[i],:] = measurements[i,:]
-        complete_measurements = self.sensor_scaler['random'].transform(complete_measurements)
+        complete_measurements = self.sensor_scaler[method].transform(complete_measurements)
         return complete_measurements
 
     # used for transforming raw new sensor measurements
-    def transform_X(self, measurements):
-        return self.sensor_scaler['random'].transform(measurements)
+    # def transform_X(self, measurements):
+    #     return self.sensor_scaler[method].transform(measurements)
 
 
 

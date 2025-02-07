@@ -273,7 +273,7 @@ class SHREDDataManager:
         return results
 
 
-    def generate_X(self, start = None, end = None, measurements = None, time = None, forecaster=None):
+    def generate_X(self, start = None, end = None, measurements = None, time = None, forecaster=None, method = None):
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
@@ -295,9 +295,9 @@ class SHREDDataManager:
                     end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
                     if measurements is not None:
                         field_measurements = measurements[:,start_sensor:end_sensor]
-                        result = data_processor.generate_X(end = end, measurements = field_measurements, time = time)
+                        result = data_processor.generate_X(end = end, measurements = field_measurements, time = time, method = method)
                     else:
-                        result = data_processor.generate_X(end = end, measurements = None, time = time)
+                        result = data_processor.generate_X(end = end, measurements = None, time = time, method = method)
                     if results is None:
                         results = result
                     else:
