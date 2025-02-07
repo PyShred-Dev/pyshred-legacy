@@ -73,10 +73,10 @@ class SHREDDataProcessor:
 
     def generate_dataset(self, train_indices, val_indices, test_indices, method):
         """
-        Sets train, validation, and test SHREDDataset objects with generated dataset.
+        Sets train, val, and test SHREDDataset objects with generated dataset.
         """
-        X_train, X_valid, X_test = None, None, None
-        y_train, y_valid, y_test = None, None, None
+        X_train, X_val, X_test = None, None, None
+        y_train, y_val, y_test = None, None, None
 
         # Generate dataset for Reconstructor
         if method == 'reconstructor' or method == 'predictor':
@@ -90,7 +90,7 @@ class SHREDDataProcessor:
                 else:
                     lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.sensor_measurements, self.lags)
                 X_train = lagged_sensor_sequences[train_indices]
-                X_valid = lagged_sensor_sequences[val_indices]
+                X_val = lagged_sensor_sequences[val_indices]
                 X_test = lagged_sensor_sequences[test_indices]
 
             # Generate Y
@@ -101,7 +101,7 @@ class SHREDDataProcessor:
             # transform
             self.transform(method)
             # generate y data
-            y_train, y_valid, y_test = generate_y_train_val_test(self.transformed_data, train_indices, val_indices, test_indices, method)
+            y_train, y_val, y_test = generate_y_train_val_test(self.transformed_data, train_indices, val_indices, test_indices, method)
             # save shape for post processing
             self.Y_spatial_dim = y_train.shape[1]
             self.full_state_data = unflatten(data = self.full_state_data, spatial_shape=self.data_spatial_shape)
@@ -120,15 +120,15 @@ class SHREDDataProcessor:
                 X_train = lagged_sensor_sequences[train_indices, :,:]
                 y_train = lagged_sensor_sequences[train_indices+1,-1,:]
 
-                X_valid = lagged_sensor_sequences[val_indices, :, :]
-                y_valid = lagged_sensor_sequences[val_indices+1,-1,:]
+                X_val = lagged_sensor_sequences[val_indices, :, :]
+                y_val = lagged_sensor_sequences[val_indices+1,-1,:]
 
                 X_test = lagged_sensor_sequences[test_indices, :, :]
                 y_test = lagged_sensor_sequences[test_indices+1,-1,:]
 
         return {
             'train': (X_train, y_train),
-            'validation': (X_valid, y_valid),
+            'val': (X_val, y_val),
             'test': (X_test, y_test)
         }
 
@@ -242,11 +242,11 @@ class SHREDDataProcessor:
 
 
     
-    def generate_y_forecaster_train_val_test(self, X_train, X_valid, X_test): 
+    def generate_y_forecaster_train_val_test(self, X_train, X_val, X_test): 
         train = X_train[1:, -1, :]  # Use the sensor measurements at the next timestep (1399, 5)
-        valid = X_valid[1:, -1, :]
+        val = X_val[1:, -1, :]
         test = X_test[1:, -1, :]
-        return train, valid,test
+        return train, val,test
 
 
 

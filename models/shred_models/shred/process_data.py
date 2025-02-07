@@ -46,25 +46,25 @@ def index_to_coord(index, spatial_shape):
         index //= dim
     return tuple(reversed(coord))
 
-# Generate indicies for training and validation dataset for reconstructor
-# train and validation indices combined span from 0 to num_timesteps - lags - 1.
+# Generate indicies for training and val dataset for reconstructor
+# train and val indices combined span from 0 to num_timesteps - lags - 1.
 def generate_train_val_indices_reconstructor(num_timesteps, lags, val_size):
     train_size = 1 - val_size
     train_indices = np.random.choice(num_timesteps - lags, size = int(train_size * (num_timesteps-lags)), replace = False)
     mask = np.ones(num_timesteps - lags)
     mask[train_indices] = 0
-    valid_indices = np.arange(0, num_timesteps - lags)[np.where(mask!=0)[0]]
-    return train_indices, valid_indices
+    val_indices = np.arange(0, num_timesteps - lags)[np.where(mask!=0)[0]]
+    return train_indices, val_indices
 
-# Generate indicies for training and validation dataset for forecaster
-# train and validation indices combined span from 0 to num_timesteps - lags - 1.
+# Generate indicies for training and val dataset for forecaster
+# train and val indices combined span from 0 to num_timesteps - lags - 1.
 def generate_train_val_indices_forecaster(num_timesteps, lags, val_size):
     train_size = 1 - val_size
     train_indices = np.arange(0, int(train_size * (num_timesteps-lags)))
-    valid_indices = np.arange(int(train_size * (num_timesteps-lags)), num_timesteps-lags)
-    return train_indices, valid_indices
+    val_indices = np.arange(int(train_size * (num_timesteps-lags)), num_timesteps-lags)
+    return train_indices, val_indices
 
-def generate_train_val_dataset_reconstructor(load_X, train_indices, valid_indices, lags, num_sensors):
+def generate_train_val_dataset_reconstructor(load_X, train_indices, val_indices, lags, num_sensors):
     n = load_X.shape[0]  # n is number to timesteps
     sensor_column_indices = np.arange(num_sensors)
     ### Generate input sequences to a SHRED model
@@ -78,20 +78,20 @@ def generate_train_val_dataset_reconstructor(load_X, train_indices, valid_indice
     
     ### Data in
     train_data_in = torch.tensor(all_data_in[train_indices], dtype=torch.float32).to(device)
-    valid_data_in = torch.tensor(all_data_in[valid_indices], dtype=torch.float32).to(device)
+    val_data_in = torch.tensor(all_data_in[val_indices], dtype=torch.float32).to(device)
 
     ### Data out
     train_data_out = torch.tensor(load_X[train_indices + lags], dtype=torch.float32).to(device)
-    valid_data_out = torch.tensor(load_X[valid_indices + lags], dtype=torch.float32).to(device)
+    val_data_out = torch.tensor(load_X[val_indices + lags], dtype=torch.float32).to(device)
 
     train_dataset = TimeSeriesDataset(train_data_in, train_data_out)
-    valid_dataset = TimeSeriesDataset(valid_data_in, valid_data_out)
+    val_dataset = TimeSeriesDataset(val_data_in, val_data_out)
 
-    return train_dataset, valid_dataset
+    return train_dataset, val_dataset
 
 
-def generate_train_val_dataset_sensor_forecaster(load_X, train_indices, valid_indices, lags, num_sensors):
-    valid_indices = valid_indices[:-1] # remove last index because forecast looks at one frame ahead (or else out of bounds error)
+def generate_train_val_dataset_sensor_forecaster(load_X, train_indices, val_indices, lags, num_sensors):
+    val_indices = val_indices[:-1] # remove last index because forecast looks at one frame ahead (or else out of bounds error)
     n = load_X.shape[0] # n is number to timesteps
     load_X = load_X[:, :num_sensors]
     ### Generate input sequences to a SHRED model
@@ -105,15 +105,15 @@ def generate_train_val_dataset_sensor_forecaster(load_X, train_indices, valid_in
     
     ### Data in
     train_data_in = torch.tensor(all_data_in[train_indices], dtype=torch.float32).to(device)
-    valid_data_in = torch.tensor(all_data_in[valid_indices], dtype=torch.float32).to(device)
+    val_data_in = torch.tensor(all_data_in[val_indices], dtype=torch.float32).to(device)
 
     ### Data out: +1 to have output be one step ahead of final sensor measurement
     train_data_out = torch.tensor(load_X[train_indices + lags + 1], dtype=torch.float32).to(device)
-    valid_data_out = torch.tensor(load_X[valid_indices + lags + 1], dtype=torch.float32).to(device)
+    val_data_out = torch.tensor(load_X[val_indices + lags + 1], dtype=torch.float32).to(device)
     train_dataset = TimeSeriesDataset(train_data_in, train_data_out)
-    valid_dataset = TimeSeriesDataset(valid_data_in, valid_data_out)
+    val_dataset = TimeSeriesDataset(val_data_in, val_data_out)
 
-    return train_dataset, valid_dataset
+    return train_dataset, val_dataset
 
 
 

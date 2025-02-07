@@ -35,12 +35,12 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 
 def get_train_val_test_indices(n, train_size, val_size, test_size, method):
     """
-    Returns a dict of train, validation, and test indices.
+    Returns a dict of train, val, and test indices.
     Input:
     - n: Effective number of timesteps. This is the number of time steps SHRED will be able perform reconstruction on.
          Currently this is equal to total number of time steps minus lags
     - train_size: A float representing size of training data
-    - val_size: A float representing size of validation data
+    - val_size: A float representing size of val data
     - test_size: A float representing size of test data
     - method: Either "random" (generate indices for reconstructor) or "sequential" (generate indices for forecaster)
     """
@@ -67,7 +67,7 @@ def get_train_val_test_indices(n, train_size, val_size, test_size, method):
     test_indices = indices[num_train_indices + num_val_indices:]
     return {
         "train": train_indices,
-        "validation": val_indices,
+        "val": val_indices,
         "test": test_indices,
     }
 
@@ -306,9 +306,9 @@ def generate_y_train_val_test(data, train_indices, val_indices, test_indices, me
     Output: 2D numpy array with timesteps along axis 0 and flattened state data along axis 1.
     """
     train = data[method][train_indices]
-    valid = data[method][val_indices]
+    val = data[method][val_indices]
     test = data[method][test_indices]
-    return train, valid, test
+    return train, val, test
 
 
 

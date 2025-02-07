@@ -69,11 +69,11 @@ class SHRED():
     sensor_data : 2d-array of shape (n_sensors, n_timesteps)
         Sensor data used during `fit`
     
-    reconstructor_validation_errors : numpy.ndarray
-        History of reconstructor validation errors at each training epoch.
+    reconstructor_val_errors : numpy.ndarray
+        History of reconstructor val errors at each training epoch.
     
-    recon_forecast_validation_errors : numpy.ndarray
-        History of sensor_forecaster validation errors at each training epoch.
+    recon_forecast_val_errors : numpy.ndarray
+        History of sensor_forecaster val errors at each training epoch.
 
     Methods:
     --------
@@ -144,12 +144,12 @@ class SHRED():
         elif isinstance(sequence, str):
             sequence = sequence.upper()
             if sequence not in SEQUENCE_MODELS:
-                raise ValueError(f"Invalid sequence model: {sequence}. Choose from: {list(SEQUENCE_MODELS.keys())}")
+                raise ValueError(f"invalid sequence model: {sequence}. Choose from: {list(SEQUENCE_MODELS.keys())}")
             self._sequence_model_reconstructor = SEQUENCE_MODELS[sequence]()
             self._sequence_model_predictor = SEQUENCE_MODELS[sequence]()
             self._sequence_model_sensor_forecaster = SEQUENCE_MODELS[sequence]()
         else:
-            raise ValueError("Invalid type for 'sequence'. Must be str or an AbstractSequence instance.")
+            raise ValueError("invalid type for 'sequence'. Must be str or an AbstractSequence instance.")
 
         # Initialize Decoder Model
         if isinstance(decoder, AbstractDecoder):
@@ -160,26 +160,26 @@ class SHRED():
         elif isinstance(decoder, str):
             decoder = decoder.upper()
             if decoder not in DECODER_MODELS:
-                raise ValueError(f"Invalid decoder model: {decoder}. Choose from: {list(DECODER_MODELS.keys())}")
+                raise ValueError(f"invalid decoder model: {decoder}. Choose from: {list(DECODER_MODELS.keys())}")
             self._decoder_model_reconstructor = DECODER_MODELS[decoder]()
             self._decoder_model_predictor = DECODER_MODELS[decoder]()
             self._decoder_model_sensor_forecaster = DECODER_MODELS[decoder]()
         else:
-            raise ValueError("Invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
+            raise ValueError("invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
 
         self.sensor_forecaster = None
         self.reconstructor = None
         self.predictor = None
 
-        self.reconstructor_validation_errors = None
-        self.predictor_validation_errors = None
-        self.sensor_forecaster_validation_errors = None
+        self.reconstructor_val_errors = None
+        self.predictor_val_errors = None
+        self.sensor_forecaster_val_errors = None
         # self._sequence_str = self._sequence_model_reconstructor.model_name # sequence model name
         # self._decoder_str = self._decoder_model_reconstructor.model_name # decoder model name       
         # self.sensor_summary = None # information about sensors (a pandas dataframe)
         # self.sensor_data = None # raw sensor data, sensors as rows, timesteps as columns
-        # self.reconstructor_validation_errors = None
-        # self.sensor_forecaster_validation_errors = None
+        # self.reconstructor_val_errors = None
+        # self.sensor_forecaster_val_errors = None
         # self.reconstructor = None
         # self._sensor_forecaster = None
         # self._sc_sensors = None
@@ -219,10 +219,10 @@ class SHRED():
         # # Check if start time is greater than train data start time + lag time
         # if start_time < self._time[0] + (self._lags * time_step):
         #     raise ValueError(f"Start time must be greater or equal to {self._time[0] + (self._lags * time_step)}")
-        # # Check if start time is valid 
+        # # Check if start time is val 
         # if (start_time - self._time[0])%time_step != 0:
         #     raise ValueError(f"Start time ({start_time}) is invalid.")
-        # # Check if end time is valid 
+        # # Check if end time is val 
         # if (end_time - self._time[0])%time_step != 0:
         #     raise ValueError(f"End time ({end_time}) is invalid.")
         # if sensor_data is not None:
@@ -286,7 +286,7 @@ class SHRED():
         # return ReconstructionResult(recon_dict=recon_dict, sensor_measurements=sensor_measurements_unscaled_recon, time= np.arange(start_time, end_time + time_step, time_step))
 
 
-    def fit(self, train_dataset, valid_dataset,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
+    def fit(self, train_dataset, val_dataset,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -327,7 +327,7 @@ class SHRED():
             If None, no compression will be performed. Default is 20.
         
         val_size : float, optional
-            A float representing the proportion of the dataset to allocate for validation.
+            A float representing the proportion of the dataset to allocate for val.
             Default is 0.2.
         
         batch_size : int, optional
@@ -349,9 +349,9 @@ class SHRED():
         ########################################### SHRED Reconstructor #################################################
         if train_dataset.reconstructor_dataset is not None:
             train_set = train_dataset.reconstructor_dataset
-            valid_set = valid_dataset.reconstructor_dataset
+            val_set = val_dataset.reconstructor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
-            output_size = valid_set.Y.shape[1]
+            output_size = val_set.Y.shape[1]
             print('input_size', input_size)
             print('output_size', output_size)
             print('self._sequence_model_reconstructor.output_size', self._sequence_model_reconstructor.output_size)
@@ -362,7 +362,7 @@ class SHRED():
             self.reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_reconstructor,
                                                       decoder=self._decoder_model_reconstructor).to(device)
             print("\nFitting Reconstructor...")
-            self.reconstructor_validation_errors = self.reconstructor.fit(model = self.reconstructor, train_dataset = train_set, valid_dataset = valid_set,
+            self.reconstructor_val_errors = self.reconstructor.fit(model = self.reconstructor, train_dataset = train_set, val_dataset = val_set,
                                                                 num_sensors = input_size, output_size = output_size
                                     , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
         
@@ -370,9 +370,9 @@ class SHRED():
         ########################################### SHRED Predictor #################################################
         if train_dataset.predictor_dataset is not None:
             train_set = train_dataset.predictor_dataset
-            valid_set = valid_dataset.predictor_dataset
+            val_set = val_dataset.predictor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
-            output_size = valid_set.Y.shape[1]
+            output_size = val_set.Y.shape[1]
             print('input_size', input_size)
             print('output_size', output_size)
             print('self._sequence_model_predictor.output_size', self._sequence_model_predictor.output_size)
@@ -383,7 +383,7 @@ class SHRED():
             self.predictor = RECONSTRUCTOR(sequence=self._sequence_model_predictor,
                                                         decoder=self._decoder_model_predictor).to(device)
             print("\nFitting Predictor...")
-            self.predictor_validation_errors = self.predictor.fit(model = self.predictor, train_dataset = train_set, valid_dataset = valid_set,
+            self.predictor_val_errors = self.predictor.fit(model = self.predictor, train_dataset = train_set, val_dataset = val_set,
                                                                 num_sensors = input_size, output_size = output_size
                                     , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
         
@@ -391,9 +391,9 @@ class SHRED():
         ########################################### SHRED Sensor Forecaster ####################################################
         if train_dataset.sensor_forecaster_dataset is not None:
             train_set = train_dataset.sensor_forecaster_dataset
-            valid_set = valid_dataset.sensor_forecaster_dataset
+            val_set = val_dataset.sensor_forecaster_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
-            output_size = valid_set.Y.shape[1]
+            output_size = val_set.Y.shape[1]
             print('input_size', input_size)
             print('output_size', output_size)
             self._sequence_model_sensor_forecaster.initialize(input_size)
@@ -404,17 +404,17 @@ class SHRED():
                                                 decoder=self._decoder_model_sensor_forecaster).to(device)
             # self.sensor_forecaster = _SHRED_FORECASTER(model=LSTM without decoder)
             print("\nFitting Sensor Forecaster...")
-            self.sensor_forecaster_validation_errors =  self.sensor_forecaster.fit(model = self.sensor_forecaster, train_dataset = train_set, valid_dataset = valid_set, num_sensors = input_size,
+            self.sensor_forecaster_val_errors =  self.sensor_forecaster.fit(model = self.sensor_forecaster, train_dataset = train_set, val_dataset = val_set, num_sensors = input_size,
                                         output_size = output_size, batch_size = batch_size, num_epochs = num_epochs,
                                         lr = lr, verbose = verbose, patience = patience)
             
         result = {}
-        if self.reconstructor_validation_errors is not None:
-            result['reconstruction_val_errors'] = self.reconstructor_validation_errors
-        if self.predictor_validation_errors is not None:
-            result['prediction_val_errors'] = self.predictor_validation_errors
-        if self.sensor_forecaster_validation_errors is not None:
-            result['sensor_forecast_val_errors'] = self.sensor_forecaster_validation_errors
+        if self.reconstructor_val_errors is not None:
+            result['reconstruction_val_errors'] = self.reconstructor_val_errors
+        if self.predictor_val_errors is not None:
+            result['prediction_val_errors'] = self.predictor_val_errors
+        if self.sensor_forecaster_val_errors is not None:
+            result['sensor_forecast_val_errors'] = self.sensor_forecaster_val_errors
 
         return result
 
@@ -468,7 +468,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
         test_size = test_dataset.sensor_forecaster_dataset.X.shape[0]
         # forecasts sensor measurements in test set
         sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X)
-        # pads with known sensor measurements in validation set
+        # pads with known sensor measurements in val set
         sensor_forecaster_prediction = torch.cat((test_dataset.sensor_forecaster_dataset.X[0,:,:],
                                                   sensor_forecaster_prediction), dim=0)
         sensor_forecaster_prediction = sensor_forecaster_prediction.detach().cpu().numpy()
@@ -557,10 +557,10 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
     #     # Check if start time is greater than train data start time + lag time
     #     if start_time < self._time[0] + (self._lags * time_step):
     #         raise ValueError(f"Start time must be greater or equal to {self._time[0] + (self._lags * time_step)}")
-    #     # Check if start time is valid 
+    #     # Check if start time is val 
     #     if (start_time - self._time[0])%time_step != 0:
     #         raise ValueError(f"Start time ({start_time}) is invalid.")
-    #     # Check if end time is valid 
+    #     # Check if end time is val 
     #     if (end_time - self._time[0])%time_step != 0:
     #         raise ValueError(f"End time ({end_time}) is invalid.")
     #     if sensor_data is not None:
@@ -638,7 +638,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
     #     """
     #     sensor_measurments_scaled = self._scale_sensor_data(sensor_measurments).T # timesteps as rows
     #     n = sensor_measurments_scaled.shape[0]
-    #     num_sensors = sensor_measurments_scaled.shape[1] # validate data in using self.num_sensors?
+    #     num_sensors = sensor_measurments_scaled.shape[1] # VALIDATE data in using self.num_sensors?
     #     data_in = np.zeros((n - self._lags, self._lags, num_sensors))
     #     for i in range(len(data_in)):
     #         data_in[i] = sensor_measurments_scaled[i:i+self._lags]
@@ -703,14 +703,14 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
     #     f"{'-'*total_width}\n"
     #     summary +=f"{'Sequence:':<{between_width}}{self.reconstructor._sequence_str}\n"
     #     summary += f"{'Decoder:':<{between_width}}{self.reconstructor._decoder_str}\n"
-    #     summary += f"{'Validation Error (L2):':<{between_width}}{self.reconstructor._best_L2_error:.3f}\n"
+    #     summary += f"{'val Error (L2):':<{between_width}}{self.reconstructor._best_L2_error:.3f}\n"
     #     if self.sensor_forecaster is not None:
     #         summary += f"{'-'*total_width}\n"
     #         summary += f"{'Sensor Forecaster':^60}\n"
     #         f"{'-'*total_width}\n"
     #         summary += f"{'Sequence:':<{between_width}}{self.sensor_forecaster._sequence_str}\n"
     #         summary += f"{'Decoder:':<{between_width}}{self.sensor_forecaster._decoder_str}\n"
-    #         summary += f"{'Validation Error (L2):':<{between_width}}{self.sensor_forecaster._best_L2_error:.3f}\n"
+    #         summary += f"{'val Error (L2):':<{between_width}}{self.sensor_forecaster._best_L2_error:.3f}\n"
     #     summary += f"{'='*total_width}\n"
     #     summary += f"{'No. Observations:':<{between_width}}{len(self._time)}\n"
     #     summary += f"{'No. Sensors:':<{between_width}}{self.sensor_data.shape[0]}\n"
@@ -791,7 +791,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
 #         output = self._decoder_model(h_out)
 #         return output
     
-#     def fit(self,model, train_dataset, valid_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
+#     def fit(self,model, train_dataset, val_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
 #         """
 #         Train SHRED using the high-dimensional state space data.
 
@@ -849,9 +849,9 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
 
 #             model.eval()
 #             with torch.no_grad():
-#                 val_outputs = model(valid_dataset.X)
-#                 val_loss = criterion(val_outputs, valid_dataset.Y).item()
-#                 val_error = torch.linalg.norm(val_outputs - valid_dataset.Y) / torch.linalg.norm(valid_dataset.Y)
+#                 val_outputs = model(val_dataset.X)
+#                 val_loss = criterion(val_outputs, val_dataset.Y).item()
+#                 val_error = torch.linalg.norm(val_outputs - val_dataset.Y) / torch.linalg.norm(val_dataset.Y)
 #                 val_error = val_error.item()
 #                 val_error_list.append(val_error)
 

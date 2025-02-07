@@ -17,7 +17,7 @@ class SHREDDataManager:
     # TODO: each sensor and parameter can be identified to a dataset/field/regime with the unique id of the SHREDDataProcessor
 
     def __init__(self, parametric = False, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15,
-                 scaling = "minmax", compression = True, reconstructor=True, forecastor=True):
+                 scaling = True, compression = True, reconstructor=True, forecastor=True):
         self.parametric = parametric
         self.lags = lags # number of time steps to look back
         self.scaling = scaling

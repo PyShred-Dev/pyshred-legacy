@@ -46,7 +46,7 @@ class ParametricSHREDDataProcessor:
         else:
             self.nparams = 0
         # self.data = get_data(data) # full-state data where the last axis is time
-        self.n_components = compression # DAVID THIS IS FOR TESTING ONLY TODO: add processing/validation
+        self.n_components = compression # DAVID THIS IS FOR TESTING ONLY TODO: add processing/val
         # self.full_state_data = None
         self.params = params
 
@@ -109,10 +109,10 @@ class ParametricSHREDDataProcessor:
 
     def generate_dataset(self, train_indices, val_indices, test_indices, method):
         """
-        Sets train, validation, and test SHREDDataset objects with generated dataset.
+        Sets train, val, and test SHREDDataset objects with generated dataset.
         """
-        X_train, X_valid, X_test = None, None, None
-        y_train, y_valid, y_test = None, None, None
+        X_train, X_val, X_test = None, None, None
+        y_train, y_val, y_test = None, None, None
 
         # Processing regarding X
         # Parametric Case:
@@ -179,22 +179,22 @@ class ParametricSHREDDataProcessor:
             else:
                 all_traj_sensor_measurements_and_params = all_traj_sensor_measurements
             train_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[train_indices]
-            valid_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[val_indices]
+            val_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[val_indices]
             test_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params[test_indices]
             # print(train_traj_sensor_measurements_and_params.shape[2])
             flattened_train_traj_sensor_measurements_and_params = train_traj_sensor_measurements_and_params.reshape(
                 train_traj_sensor_measurements_and_params.shape[0] * train_traj_sensor_measurements_and_params.shape[1],
                 train_traj_sensor_measurements_and_params.shape[2])
             
-            flattened_valid_traj_sensor_measurements_and_params = valid_traj_sensor_measurements_and_params.reshape(
-                valid_traj_sensor_measurements_and_params.shape[0] * valid_traj_sensor_measurements_and_params.shape[1],
-                valid_traj_sensor_measurements_and_params.shape[2])
+            flattened_val_traj_sensor_measurements_and_params = val_traj_sensor_measurements_and_params.reshape(
+                val_traj_sensor_measurements_and_params.shape[0] * val_traj_sensor_measurements_and_params.shape[1],
+                val_traj_sensor_measurements_and_params.shape[2])
             
             flattened_test_traj_sensor_measurements_and_params = test_traj_sensor_measurements_and_params.reshape(
                 test_traj_sensor_measurements_and_params.shape[0] * test_traj_sensor_measurements_and_params.shape[1],
                 test_traj_sensor_measurements_and_params.shape[2])
             # print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
-            # print('flattened_valid_traj_sensor_measurements_and_params:', flattened_valid_traj_sensor_measurements_and_params.shape)
+            # print('flattened_val_traj_sensor_measurements_and_params:', flattened_val_traj_sensor_measurements_and_params.shape)
             flattened_all_traj_sensor_measurements_and_params = all_traj_sensor_measurements_and_params.reshape(
                 all_traj_sensor_measurements_and_params.shape[0] * all_traj_sensor_measurements_and_params.shape[1],
                 all_traj_sensor_measurements_and_params.shape[2])
@@ -204,26 +204,26 @@ class ParametricSHREDDataProcessor:
             self.fit_sensors(flattened_train_traj_sensor_measurements_and_params)
             # print('flattened_train_traj_sensor_measurements_and_params:', flattened_train_traj_sensor_measurements_and_params.shape)
             # transform
-            transformed_flattened_train_traj_sensor_measurements_and_params, transformed_flattened_valid_traj_sensor_measurements_and_params,transformed_flattened_test_traj_sensor_measurements_and_params = \
-            self.transform_sensor(flattened_train_traj_sensor_measurements_and_params, flattened_valid_traj_sensor_measurements_and_params,
+            transformed_flattened_train_traj_sensor_measurements_and_params, transformed_flattened_val_traj_sensor_measurements_and_params,transformed_flattened_test_traj_sensor_measurements_and_params = \
+            self.transform_sensor(flattened_train_traj_sensor_measurements_and_params, flattened_val_traj_sensor_measurements_and_params,
                                                         flattened_test_traj_sensor_measurements_and_params)
             # print('transformed_flattened_train_traj_sensor_measurements_and_params:', transformed_flattened_train_traj_sensor_measurements_and_params.shape)
             # print('ntimes', self.ntimes)
             # reshape back to (n_traj, n_time, n_sensors + n_params) to simply lag generating process
             transformed_train_traj_sensor_measurements_and_params = transformed_flattened_train_traj_sensor_measurements_and_params.reshape(
                 int(transformed_flattened_train_traj_sensor_measurements_and_params.shape[0]/self.ntimes), self.ntimes, self.nsensors + self.nparams)
-            transformed_valid_traj_sensor_measurements_and_params = transformed_flattened_valid_traj_sensor_measurements_and_params.reshape(
-                int(transformed_flattened_valid_traj_sensor_measurements_and_params.shape[0]/self.ntimes), self.ntimes, self.nsensors + self.nparams)
+            transformed_val_traj_sensor_measurements_and_params = transformed_flattened_val_traj_sensor_measurements_and_params.reshape(
+                int(transformed_flattened_val_traj_sensor_measurements_and_params.shape[0]/self.ntimes), self.ntimes, self.nsensors + self.nparams)
             transformed_test_traj_sensor_measurements_and_params = transformed_flattened_test_traj_sensor_measurements_and_params.reshape(
                 int(transformed_flattened_test_traj_sensor_measurements_and_params.shape[0]/self.ntimes), self.ntimes, self.nsensors + self.nparams)
             # generate X data
-            X_train, X_valid, X_test = self.generate_X(transformed_train_traj_sensor_measurements_and_params, transformed_valid_traj_sensor_measurements_and_params,
+            X_train, X_val, X_test = self.generate_X(transformed_train_traj_sensor_measurements_and_params, transformed_val_traj_sensor_measurements_and_params,
                                                         transformed_test_traj_sensor_measurements_and_params)
     
         # parametric case
 
         # print('X_train:', X_train.shape)
-        # print('X_valid:', X_valid.shape)
+        # print('X_val:', X_val.shape)
         # print('X_test:', X_test.shape)
         
         # Processing regarding Y
@@ -232,7 +232,7 @@ class ParametricSHREDDataProcessor:
         val_data = self.data[val_indices]
         test_data = self.data[test_indices]
         train_data_flattened = None
-        valid_data_flattened = None
+        val_data_flattened = None
         test_data_flattened = None
         for i in range(train_data.shape[0]):
             data = train_data[i]
@@ -243,10 +243,10 @@ class ParametricSHREDDataProcessor:
         
         for i in range(val_data.shape[0]):
             data = val_data[i]
-            if valid_data_flattened is None:
-                valid_data_flattened = self.flatten(data)
+            if val_data_flattened is None:
+                val_data_flattened = self.flatten(data)
             else:
-                valid_data_flattened = np.vstack((valid_data_flattened, self.flatten(data)))
+                val_data_flattened = np.vstack((val_data_flattened, self.flatten(data)))
 
         for i in range(test_data.shape[0]):
             data = test_data[i]
@@ -258,24 +258,24 @@ class ParametricSHREDDataProcessor:
         # fit (fit and transform can be combine with a wrapper or just integrate the code together)
         self.fit(train_data_flattened)
         # transform
-        y_train, y_valid, y_test = self.transform(train_data_flattened, valid_data_flattened, test_data_flattened)
+        y_train, y_val, y_test = self.transform(train_data_flattened, val_data_flattened, test_data_flattened)
         self.Y_spatial_dim = y_train.shape[1]
         # generate y data
-        # y_train, y_valid, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
+        # y_train, y_val, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
         self.full_state_data = None
         print('done generating dataset')
         # print('self.sensor_measurements_pd',self.sensor_measurements_pd)
         # full_state_data = self.unflatten(full_state_data)
-        if X_train is not None and X_valid is not None and X_test is not None: # aka make sure sensor data exists, does not work for setting train, validation, and test to None/0 yet
+        if X_train is not None and X_val is not None and X_test is not None: # aka make sure sensor data exists, does not work for setting train, val, and test to None/0 yet
             return {
                 'train': (X_train, y_train),
-                'validation': (X_valid, y_valid),
+                'val': (X_val, y_val),
                 'test': (X_test, y_test)
             }
         else:
             return {
                 'train': (None, y_train),
-                'validation': (None, y_valid),
+                'val': (None, y_val),
                 'test': (None, y_test)
             }
 
@@ -295,7 +295,7 @@ class ParametricSHREDDataProcessor:
             self.sensor_scaler = scaler.fit(data)
 
 
-    def transform_sensor(self, train, valid, test):
+    def transform_sensor(self, train, val, test):
         """
         Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
         self.transformed_sensor_data to scaled scnsor_data (optional) have time on axis 0 (transpose).
@@ -305,9 +305,9 @@ class ParametricSHREDDataProcessor:
         # Perform scaling if all scaler-related attributes exist
         if self.sensor_scaler is not None:
             train = self.sensor_scaler.transform(train)
-            valid = self.sensor_scaler.transform(valid)
+            val = self.sensor_scaler.transform(val)
             test = self.sensor_scaler.transform(test)
-        return train, valid, test
+        return train, val, test
 
     def fit_transform(self, train_indices, method):
         pass
@@ -355,7 +355,7 @@ class ParametricSHREDDataProcessor:
                 self.scaler = scaler.fit(compressed_train_data)
 
 
-    def transform(self, train_data, valid_data, test_data):
+    def transform(self, train_data, val_data, test_data):
         """
         Expects self.full_state_data to be flattened with time on axis 0.
         Generates transfomed data which is self.full_state_data compressed (optional) and scaled (optional).
@@ -363,13 +363,13 @@ class ParametricSHREDDataProcessor:
         # Perform compression if all compression-related attributes exist
         if self.right_singular_values is not None and self.scaler_before_svd is not None:
             train_transformed_data = self.scaler_before_svd.transform(train_data)
-            valid_transformed_data = self.scaler_before_svd.transform(valid_data)
+            val_transformed_data = self.scaler_before_svd.transform(val_data)
             test_transformed_data = self.scaler_before_svd.transform(test_data)
             # TODO: transformed_data now shape (t, nstate) DAVID LOOK HERE
             # use matteo's
 
             train_transformed_data = train_transformed_data @ np.transpose(self.right_singular_values)
-            valid_transformed_data = valid_transformed_data @ np.transpose(self.right_singular_values)
+            val_transformed_data = val_transformed_data @ np.transpose(self.right_singular_values)
             test_transformed_data = test_transformed_data @ np.transpose(self.right_singular_values)
 
             # s_matrix = np.diag(self.singular_values[method]) # diagonal matrix of singular values
@@ -382,12 +382,12 @@ class ParametricSHREDDataProcessor:
         # Perform scaling if all scaler-related attributes exist
         if self.scaler is not None:
             train_transformed_data = self.scaler.transform(train_transformed_data)
-            valid_transformed_data = self.scaler.transform(valid_transformed_data)
+            val_transformed_data = self.scaler.transform(val_transformed_data)
             test_transformed_data = self.scaler.transform(test_transformed_data)
-        return train_transformed_data, valid_transformed_data, test_transformed_data
+        return train_transformed_data, val_transformed_data, test_transformed_data
 
 
-    def generate_X(self, train_data, valid_data, test_data):
+    def generate_X(self, train_data, val_data, test_data):
         """
         Generates the input data for SHRED.
         Expects self.sensor_measurements to be a 2D numpy array with time is axis 0.
@@ -404,13 +404,13 @@ class ParametricSHREDDataProcessor:
             else:
                 train_lagged_sequences = np.concatenate((train_lagged_sequences, generate_lagged_sequences_from_sensor_measurements(data, self.lags)), 0)
 
-        valid_lagged_sequences = None
-        for i in range(valid_data.shape[0]):
-            data = valid_data[i]
-            if valid_lagged_sequences is None:
-                valid_lagged_sequences = generate_lagged_sequences_from_sensor_measurements(data, self.lags)
+        val_lagged_sequences = None
+        for i in range(val_data.shape[0]):
+            data = val_data[i]
+            if val_lagged_sequences is None:
+                val_lagged_sequences = generate_lagged_sequences_from_sensor_measurements(data, self.lags)
             else:
-                valid_lagged_sequences = np.concatenate((valid_lagged_sequences, generate_lagged_sequences_from_sensor_measurements(data, self.lags)), 0)
+                val_lagged_sequences = np.concatenate((val_lagged_sequences, generate_lagged_sequences_from_sensor_measurements(data, self.lags)), 0)
 
         test_lagged_sequences = None
         for i in range(test_data.shape[0]):
@@ -420,7 +420,7 @@ class ParametricSHREDDataProcessor:
             else:
                 test_lagged_sequences = np.concatenate((test_lagged_sequences, generate_lagged_sequences_from_sensor_measurements(data, self.lags)), 0)
 
-        return train_lagged_sequences, valid_lagged_sequences, test_lagged_sequences
+        return train_lagged_sequences, val_lagged_sequences, test_lagged_sequences
     
     def generate_y(self, train_indices, val_indices, test_indices, method):
         """
@@ -430,12 +430,12 @@ class ParametricSHREDDataProcessor:
         Output: 2D numpy array with timesteps along axis 0 and flattened state data along axis 1.
         """
         # train = self.transformed_data[method][train_indices + self.lags]
-        # valid = self.transformed_data[method][val_indices + self.lags]
+        # val = self.transformed_data[method][val_indices + self.lags]
         # test = self.transformed_data[method][test_indices + self.lags]
         train = self.transformed_data[method][train_indices]
-        valid = self.transformed_data[method][val_indices]
+        val = self.transformed_data[method][val_indices]
         test = self.transformed_data[method][test_indices]
-        return train, valid, test
+        return train, val, test
     
     def flatten(self, data):
         """

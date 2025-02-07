@@ -56,7 +56,7 @@ class RECONSTRUCTOR(nn.Module):
         output = self._decoder_model(h_out)
         return output
     
-    def fit(self,model, train_dataset, valid_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
+    def fit(self,model, train_dataset, val_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -115,9 +115,9 @@ class RECONSTRUCTOR(nn.Module):
 
             model.eval()
             with torch.no_grad():
-                val_outputs = model(valid_dataset.X)
-                val_loss = criterion(val_outputs, valid_dataset.Y).item()
-                val_error = l2(valid_dataset.Y, val_outputs)
+                val_outputs = model(val_dataset.X)
+                val_loss = criterion(val_outputs, val_dataset.Y).item()
+                val_error = l2(val_dataset.Y, val_outputs)
                 val_error = val_error.item()
                 val_error_list.append(val_error)
 
@@ -130,7 +130,7 @@ class RECONSTRUCTOR(nn.Module):
                 })
                 pbar.close()
 
-            # Update best model weights if the validation error improves
+            # Update best model weights if the val error improves
             if val_error < best_val_error:
                 best_val_error = val_error
                 best_params = model.state_dict()  # Save best model parameters

@@ -33,7 +33,7 @@ class ParametricSHREDDataProcessor:
         """
         self.data = data
         # self.data = get_data(data) # full-state data where the last axis is time
-        self.n_components = compression # DAVID THIS IS FOR TESTING ONLY TODO: add processing/validation
+        self.n_components = compression # DAVID THIS IS FOR TESTING ONLY TODO: add processing/val
         self.full_state_data = None
         self.params = params
         self.parametric = parametric
@@ -96,15 +96,15 @@ class ParametricSHREDDataProcessor:
 
     def generate_dataset(self, train_indices, val_indices, test_indices, method):
         """
-        Sets train, validation, and test SHREDDataset objects with generated dataset.
+        Sets train, val, and test SHREDDataset objects with generated dataset.
         """
         # saves indices as attributes for adding new trajectory
         self.train_indices = train_indices
         self.val_indices = val_indices
         self.test_indices = test_indices
 
-        X_train, X_valid, X_test = None, None, None
-        y_train, y_valid, y_test = None, None, None
+        X_train, X_val, X_test = None, None, None
+        y_train, y_val, y_test = None, None, None
 
         # Processing regarding X
 
@@ -131,7 +131,7 @@ class ParametricSHREDDataProcessor:
                     # transform
                     self.transform_sensor(method)
                     # generate X data
-                    X_train, X_valid, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
+                    X_train, X_val, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
 
         # Non-parametric Case:
         if self.parametric is False:
@@ -155,7 +155,7 @@ class ParametricSHREDDataProcessor:
                     # transform
                     self.transform_sensor(method)
                     # generate X data
-                    X_train, X_valid, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
+                    X_train, X_val, X_test = self.generate_X(train_indices, val_indices, test_indices, method)
         
         # parametric case
 
@@ -174,20 +174,20 @@ class ParametricSHREDDataProcessor:
         # transform
         self.transform(method)
         # generate y data
-        y_train, y_valid, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
+        y_train, y_val, y_test = self.generate_y(train_indices, val_indices, test_indices, method)
         self.full_state_data = None
         print('done generating dataset')
         # full_state_data = self.unflatten(full_state_data)
-        if X_train is not None and X_valid is not None and X_test is not None: # aka make sure sensor data exists, does not work for setting train, validation, and test to None/0 yet
+        if X_train is not None and X_val is not None and X_test is not None: # aka make sure sensor data exists, does not work for setting train, val, and test to None/0 yet
             return {
                 'train': (X_train, y_train),
-                'validation': (X_valid, y_valid),
+                'val': (X_val, y_val),
                 'test': (X_test, y_test)
             }
         else:
             return {
                 'train': (None, y_train),
-                'validation': (None, y_valid),
+                'val': (None, y_val),
                 'test': (None, y_test)
             }
 
@@ -200,7 +200,7 @@ class ParametricSHREDDataProcessor:
         Stores fitted scalers as object attributes.
         """
         if method not in self.METHODS:
-            raise ValueError(f"Invalid method '{method}'. Choose from {self.METHODS}.")
+            raise ValueError(f"Inval method '{method}'. Choose from {self.METHODS}.")
         # scaling full-state data
         if self.scaling is not None:
             scaler_class = MinMaxScaler if self.scaling == 'minmax' else StandardScaler
@@ -233,7 +233,7 @@ class ParametricSHREDDataProcessor:
         """
         V_component = None
         if method not in self.METHODS:
-            raise ValueError(f"Invalid method '{method}'. Choose from {self.METHODS}.")
+            raise ValueError(f"Inval method '{method}'. Choose from {self.METHODS}.")
         # compression
         if self.n_components is not None:
             # standard scale data
@@ -303,9 +303,9 @@ class ParametricSHREDDataProcessor:
         # need to pass in the first lags number of data set well though
         lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
         train = lagged_sensor_sequences[train_indices]
-        valid = lagged_sensor_sequences[val_indices]
+        val = lagged_sensor_sequences[val_indices]
         test = lagged_sensor_sequences[test_indices]
-        return train, valid, test
+        return train, val, test
     
     def generate_y(self, train_indices, val_indices, test_indices, method):
         """
@@ -315,12 +315,12 @@ class ParametricSHREDDataProcessor:
         Output: 2D numpy array with timesteps along axis 0 and flattened state data along axis 1.
         """
         # train = self.transformed_data[method][train_indices + self.lags]
-        # valid = self.transformed_data[method][val_indices + self.lags]
+        # val = self.transformed_data[method][val_indices + self.lags]
         # test = self.transformed_data[method][test_indices + self.lags]
         train = self.transformed_data[method][train_indices]
-        valid = self.transformed_data[method][val_indices]
+        val = self.transformed_data[method][val_indices]
         test = self.transformed_data[method][test_indices]
-        return train, valid, test
+        return train, val, test
     
     def flatten(self, data):
         """

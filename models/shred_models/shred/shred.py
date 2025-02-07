@@ -46,7 +46,7 @@ class _SHRED(nn.Module):
         output = self._decoder_model(h_out)
         return output
     
-    def fit(self,model, train_dataset, valid_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
+    def fit(self,model, train_dataset, val_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -104,9 +104,9 @@ class _SHRED(nn.Module):
 
             model.eval()
             with torch.no_grad():
-                val_outputs = model(valid_dataset.X)
-                val_loss = criterion(val_outputs, valid_dataset.Y).item()
-                val_error = torch.linalg.norm(val_outputs - valid_dataset.Y) / torch.linalg.norm(valid_dataset.Y)
+                val_outputs = model(val_dataset.X)
+                val_loss = criterion(val_outputs, val_dataset.Y).item()
+                val_error = torch.linalg.norm(val_outputs - val_dataset.Y) / torch.linalg.norm(val_dataset.Y)
                 val_error = val_error.item()
                 val_error_list.append(val_error)
 
