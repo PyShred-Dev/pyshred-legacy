@@ -281,7 +281,7 @@ class SHREDDataManager:
             # generate lagged sequences from measurements
             for data_processor in self.data_processors:
                 end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
-                result = data_processor.transform_X(measurements[:,start_sensor:end_sensor])
+                result = data_processor.transform_X(measurements[:,start_sensor:end_sensor], method = method)
                 if results is None:
                     results = result
                 else:

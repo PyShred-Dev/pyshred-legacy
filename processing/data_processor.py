@@ -229,8 +229,8 @@ class SHREDDataProcessor:
         return complete_measurements
 
     # used for transforming raw new sensor measurements
-    # def transform_X(self, measurements):
-    #     return self.sensor_scaler[method].transform(measurements)
+    def transform_X(self, measurements, method):
+        return self.sensor_scaler[method].transform(measurements)
 
 
 
