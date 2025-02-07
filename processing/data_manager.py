@@ -305,12 +305,13 @@ class SHREDDataManager:
                     start_sensor = end_sensor
             # extract indices without data (gaps)
             gap_indices = np.where(np.isnan(results).any(axis=1))[0]
-            for gap in gap_indices and forecaster is not None:
-                # gap is being forecasted, gap - 1 is 'current'
-                gap_lagged_sequence = results[gap - 1 - self.lags:gap,:].copy()
-                gap_lagged_sequence = gap_lagged_sequence[np.newaxis,:,:]
-                gap_lagged_sequence = torch.tensor(gap_lagged_sequence, dtype=torch.float32, device=device)
-                results[gap] = forecaster(gap_lagged_sequence).detach().cpu().numpy()
+            if forecaster is not None:
+                for gap in gap_indices:
+                    # gap is being forecasted, gap - 1 is 'current'
+                    gap_lagged_sequence = results[gap - 1 - self.lags:gap,:].copy()
+                    gap_lagged_sequence = gap_lagged_sequence[np.newaxis,:,:]
+                    gap_lagged_sequence = torch.tensor(gap_lagged_sequence, dtype=torch.float32, device=device)
+                    results[gap] = forecaster(gap_lagged_sequence).detach().cpu().numpy()
             # if no forecaster, replace gaps with zeros
             else:
                 results[gap_indices] = 0
