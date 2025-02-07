@@ -310,7 +310,7 @@ class SHREDDataManager:
                 gap_lagged_sequence = results[gap - 1 - self.lags:gap,:].copy()
                 gap_lagged_sequence = gap_lagged_sequence[np.newaxis,:,:]
                 gap_lagged_sequence = torch.tensor(gap_lagged_sequence, dtype=torch.float32, device=device)
-                results[gap] = forecaster(gap_lagged_sequence).detach().numpy()
+                results[gap] = forecaster(gap_lagged_sequence).detach().cpu().numpy()
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
             results = results[start:end+1,:,:]
         results = torch.tensor(results, dtype=torch.float32, device=device)
