@@ -95,18 +95,15 @@ class SHREDDataManager:
         if len(self.data_processors) == 0:
             self.random_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
             self.sequential_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
-            print('self.random_indices["train"]', self.random_indices["train"])
 
 
         if 'reconstructor' in self.METHODS[self.method]:
-            print('hi')
             dataset_dict = data_processor.generate_dataset(
                 self.random_indices['train'],
                 self.random_indices['val'],
                 self.random_indices['test'],
                 method='reconstructor'
             )
-            print('dataset_dict',dataset_dict)
             self.reconstructor.append(dataset_dict)
 
         if 'predictor' in self.METHODS[self.method]:
@@ -178,7 +175,6 @@ class SHREDDataManager:
         # Process random reconstructor datasets
         if 'reconstructor' in self.METHODS[self.method]:
             for dataset_dict in self.reconstructor:
-                print(self.reconstructor)
                 X_train_reconstructor, y_train_reconstructor = concatenate_datasets(
                     X_train_reconstructor, y_train_reconstructor, dataset_dict['train'][0], dataset_dict['train'][1]
                 )
@@ -256,7 +252,6 @@ class SHREDDataManager:
         val_sensor_forecaster_dataset = TimeSeriesDataset(X_val_sensor_forecaster, y_val_sensor_forecaster)
         test_sensor_forecaster_dataset = TimeSeriesDataset(X_test_sensor_forecaster, y_test_sensor_forecaster)
 
-        print('train_reconstructor_dataset',train_reconstructor_dataset)
         SHRED_train_dataset = SHREDDataset(train_reconstructor_dataset, train_predictor_dataset, train_sensor_forecaster_dataset)
         SHRED_val_dataset = SHREDDataset(val_reconstructor_dataset, val_predictor_dataset, val_sensor_forecaster_dataset)
         SHRED_test_dataset = SHREDDataset(test_reconstructor_dataset, test_predictor_dataset, test_sensor_forecaster_dataset)
@@ -265,18 +260,14 @@ class SHREDDataManager:
 
 
     def postprocess(self, data, uncompress = True, unscale = True, method = None):
-        # uncompress = uncompress if uncompress is not None else self.compression is not None
-        # unscale = unscale if unscale is not None else self.scaling == "minmax" # prob change to boolean
         results = {}
         start_index = 0
         for data_processor in self.data_processors:
             field_spatial_dim = data_processor.Y_spatial_dim
-            # print('field_spatial_dim',field_spatial_dim)
             field_data = data[:, start_index:start_index+field_spatial_dim]
             if isinstance(data, torch.Tensor):
                 field_data = field_data.cpu().numpy()
             start_index = field_spatial_dim + start_index
-            # print('field_data.shape',field_data.shape)
             field_data = data_processor.inverse_transform(field_data, uncompress, unscale, method)
             results[data_processor.id] = field_data
         return results

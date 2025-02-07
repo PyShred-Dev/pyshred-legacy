@@ -80,7 +80,6 @@ class SHREDDataProcessor:
 
         # Generate dataset for Reconstructor
         if method == 'reconstructor' or method == 'predictor':
-            print('hi again')
             # Generate X
             if self.sensor_measurements is not None:
                 if self.scaling is True:
@@ -150,42 +149,12 @@ class SHREDDataProcessor:
             sc.fit(self.full_state_data[train_indices, :])
             self.scaler_before_svd[method] = sc
             full_state_data_std_scaled = sc.transform(self.full_state_data)
-            print('full_state_data_std_scaled',full_state_data_std_scaled)
             # rSVD
             U, S, V = randomized_svd(full_state_data_std_scaled[train_indices, :], n_components=self.n_components, n_iter='auto')
-            # print('n_components', self.n_components)
-            # print('V.shape', V.shape)
             self.right_singular_values[method] = V
             self.left_singular_values[method] = U
             self.singular_values[method] = S
             compressed_full_state_data = full_state_data_std_scaled @ V.transpose()
-            # reconstructed_full_state_data = compressed_full_state_data @ V
-            # print('reconstructed_full_state_data:', reconstructed_full_state_data)
-            # unscaled_reconstructed_full_state_data = sc.inverse_transform(reconstructed_full_state_data)
-            # print('unscaled_reconstructed_full_state_data shape:', unscaled_reconstructed_full_state_data)
-            # print("compressed full_state_data:", compressed_full_state_data.shape)
-        # transpose self.full_state_data so time on axis 0
-        # self.full_state_data = self.full_state_data.T
-        # transpose V_component so time on axis 0
-        # V_component = V_component.T
-
-        # try:
-        #     # scaling full-state data
-        #     if self.scaling is not None:
-        #         scaler_class = MinMaxScaler if self.scaling == 'minmax' else StandardScaler
-        #         scaler = scaler_class()
-        #         if self.n_components is not None:
-        #             self.scaler[method] = scaler.fit(V_component)
-        #         else:
-        #             self.scaler[method] = scaler.fit(self.full_state_data[train_indices])
-
-        # # un-tranpose self.full_state_data so time on axis 1
-        # finally:
-        #     self.full_state_data = self.full_state_data.T
-
-        
-        # scaling full-state data
-
         if self.scaling is True:
             scaler = MinMaxScaler()
             if self.n_components is not None:
@@ -200,19 +169,10 @@ class SHREDDataProcessor:
         """
         # Perform compression if all compression-related attributes exist
         if self.right_singular_values.get(method) is not None and self.scaler_before_svd[method] is not None:
-            print('self.full_state_data pre transform', self.full_state_data.shape)
             transformed_data = self.scaler_before_svd[method].transform(self.full_state_data)
-            print('transformed_data_std_scale', transformed_data.shape)
             transformed_data = transformed_data @ np.transpose(self.right_singular_values.get(method))
-            print('transformed_data', transformed_data.shape)
-            # s_matrix = np.diag(self.singular_values[method]) # diagonal matrix of singular values
-            # s_inv = np.linalg.inv(s_matrix) # compute inverse of singular values matrix
-            # transformed_data = np.dot(s_inv, np.dot(self.left_singular_values.get(method).T, transformed_data)) # calculate V_T
         else:
             transformed_data = self.full_state_data
-        # Transpose compressed data, time on axis 0
-        # transformed_data = transformed_data.T
-
         # Perform scaling if all scaler-related attributes exist
         if self.scaler.get(method) is not None:
             self.transformed_data[method] = self.scaler[method].transform(transformed_data)
@@ -227,9 +187,7 @@ class SHREDDataProcessor:
         """
         # check if scaler fitted on reconstructor is not None
         if self.scaler.get(method) is not None and unscale is True:
-            print('method', method)
             data = self.scaler[method].inverse_transform(data)
-            print(data.shape)
 
         # check if compression is None
         if method != 'sensor_forecaster':
@@ -237,7 +195,6 @@ class SHREDDataProcessor:
                 data = data @ self.right_singular_values.get(method)
                 data = self.scaler_before_svd[method].inverse_transform(data)
                 data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
-                print('unflattend')
         return data
 
 
@@ -261,10 +218,8 @@ class SHREDDataProcessor:
         nsensors = self.sensor_measurements.shape[1] # make sure measurements dim matches
         complete_measurements = np.full((timesteps, nsensors), np.nan)
         if timesteps > len(self.sensor_measurements):
-            print('hello')
             complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements
         else:
-            print('bye')
             complete_measurements[0:timesteps,:] = self.sensor_measurements[0:timesteps,:]
         if measurements is not None and time is not None:
             for i in range(len(time)):
