@@ -56,18 +56,18 @@ class SHREDDataProcessor:
         self.sensor_measurements_pd = None
         self.id = str(id)
         self.Y_spatial_dim = None
-
-        sensor_measurements_dict = get_sensor_measurements(
-                        full_state_data=self.full_state_data,
-                        id = self.id,
-                        time = self.time,
-                        random_sensors = self.random_sensors,
-                        stationary_sensors = self.stationary_sensors,
-                        mobile_sensors = self.mobile_sensors
-                        )
-        self.sensor_measurements = sensor_measurements_dict['sensor_measurements'].drop(columns=['time']).to_numpy()
-        self.sensor_measurements_pd = sensor_measurements_dict['sensor_measurements']
-        self.sensor_summary = sensor_measurements_dict['sensor_summary']
+        if self.random_sensors is not None or self.stationary_sensors is not None or self.mobile_sensors is not None:
+            sensor_measurements_dict = get_sensor_measurements(
+                            full_state_data=self.full_state_data,
+                            id = self.id,
+                            time = self.time,
+                            random_sensors = self.random_sensors,
+                            stationary_sensors = self.stationary_sensors,
+                            mobile_sensors = self.mobile_sensors
+                            )
+            self.sensor_measurements = sensor_measurements_dict['sensor_measurements'].drop(columns=['time']).to_numpy()
+            self.sensor_measurements_pd = sensor_measurements_dict['sensor_measurements']
+            self.sensor_summary = sensor_measurements_dict['sensor_summary']
 
 
 
