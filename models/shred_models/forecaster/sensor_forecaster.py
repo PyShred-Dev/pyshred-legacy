@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 import torch
 from processing.utils import l2
 
-class FORECASTER(nn.Module):
+class SENSOR_FORECASTER(nn.Module):
     """
     The SHallow REcurrent Decoder (SHRED) Neural Network.
     

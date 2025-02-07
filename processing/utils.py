@@ -9,16 +9,13 @@ class SHREDDataset():
     recon_data is a TimeSeriesDataset object for SHRED Reconstructor
     forecast_data is a TimeSeriesDataset object for SHRED Forecaster
     """
-    def __init__(self, random_reconstructor_dataset = None, temporal_reconstructor_dataset = None, sensor_forecaster_dataset = None):
-        if random_reconstructor_dataset is not None:
-            self.random_reconstructor_dataset = random_reconstructor_dataset
-        if temporal_reconstructor_dataset is not None:
-            self.temporal_reconstructor_dataset = temporal_reconstructor_dataset
+    def __init__(self, reconstructor_dataset = None, predictor_dataset = None, sensor_forecaster_dataset = None):
+        if reconstructor_dataset is not None:
+            self.reconstructor_dataset = reconstructor_dataset
+        if predictor_dataset is not None:
+            self.predictor_dataset = predictor_dataset
         if sensor_forecaster_dataset is not None:
             self.sensor_forecaster_dataset = sensor_forecaster_dataset
-        
-        
-        
 
 
 class TimeSeriesDataset(torch.utils.data.Dataset):

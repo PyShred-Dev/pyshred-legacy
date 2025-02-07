@@ -21,7 +21,7 @@ from ...decoder_models.abstract_decoder import AbstractDecoder
 # from ..decoder_models.abstract_decoder import AbstractDecoder
 from ...decoder_models import *
 from ...sequence_models import *
-from ..forecaster.forecaster import FORECASTER
+from ..forecaster.sensor_forecaster import SENSOR_FORECASTER
 from ..reconstructor.reconstructor import RECONSTRUCTOR
 
 
@@ -43,7 +43,7 @@ DECODER_MODELS = {
 }
 
 
-class SHRED(nn.Module):
+class SHRED():
     """
     SHallow REcurrent Decoder (SHRED) neural network architecture. SHRED learns a mapping from
     trajectories of sensor measurements to high-dimensional, spatio-temporal states.
@@ -69,7 +69,7 @@ class SHRED(nn.Module):
     sensor_data : 2d-array of shape (n_sensors, n_timesteps)
         Sensor data used during `fit`
     
-    random_reconstructor_validation_errors : numpy.ndarray
+    reconstructor_validation_errors : numpy.ndarray
         History of reconstructor validation errors at each training epoch.
     
     recon_forecast_validation_errors : numpy.ndarray
@@ -138,49 +138,49 @@ class SHRED(nn.Module):
         super().__init__()
         # Initialize Sequence Model
         if isinstance(sequence, AbstractSequence):
-            self._sequence_model_random_reconstructor = copy.deepcopy(sequence)
-            self._sequence_model_temporal_reconstructor = copy.deepcopy(sequence)
+            self._sequence_model_reconstructor = copy.deepcopy(sequence)
+            self._sequence_model_predictor = copy.deepcopy(sequence)
             self._sequence_model_sensor_forecaster = copy.deepcopy(sequence)
         elif isinstance(sequence, str):
             sequence = sequence.upper()
             if sequence not in SEQUENCE_MODELS:
                 raise ValueError(f"Invalid sequence model: {sequence}. Choose from: {list(SEQUENCE_MODELS.keys())}")
-            self._sequence_model_random_reconstructor = SEQUENCE_MODELS[sequence]()
-            self._sequence_model_temporal_reconstructor = SEQUENCE_MODELS[sequence]()
+            self._sequence_model_reconstructor = SEQUENCE_MODELS[sequence]()
+            self._sequence_model_predictor = SEQUENCE_MODELS[sequence]()
             self._sequence_model_sensor_forecaster = SEQUENCE_MODELS[sequence]()
         else:
             raise ValueError("Invalid type for 'sequence'. Must be str or an AbstractSequence instance.")
 
         # Initialize Decoder Model
         if isinstance(decoder, AbstractDecoder):
-            self._decoder_model_random_reconstructor = copy.deepcopy(decoder)
-            self._decoder_model_temporal_reconstructor = copy.deepcopy(decoder)
+            self._decoder_model_reconstructor = copy.deepcopy(decoder)
+            self._decoder_model_predictor = copy.deepcopy(decoder)
             self._decoder_model_sensor_forecaster = copy.deepcopy(decoder)
 
         elif isinstance(decoder, str):
             decoder = decoder.upper()
             if decoder not in DECODER_MODELS:
                 raise ValueError(f"Invalid decoder model: {decoder}. Choose from: {list(DECODER_MODELS.keys())}")
-            self._decoder_model_random_reconstructor = DECODER_MODELS[decoder]()
-            self._decoder_model_temporal_reconstructor = DECODER_MODELS[decoder]()
+            self._decoder_model_reconstructor = DECODER_MODELS[decoder]()
+            self._decoder_model_predictor = DECODER_MODELS[decoder]()
             self._decoder_model_sensor_forecaster = DECODER_MODELS[decoder]()
         else:
             raise ValueError("Invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
 
         self.sensor_forecaster = None
-        self.random_reconstructor = None
-        self.temporal_reconstructor = None
+        self.reconstructor = None
+        self.predictor = None
 
-        self.random_reconstructor_validation_errors = None
-        self.temporal_reconstructor_validation_errors = None
+        self.reconstructor_validation_errors = None
+        self.predictor_validation_errors = None
         self.sensor_forecaster_validation_errors = None
-        # self._sequence_str = self._sequence_model_random_reconstructor.model_name # sequence model name
-        # self._decoder_str = self._decoder_model_random_reconstructor.model_name # decoder model name       
+        # self._sequence_str = self._sequence_model_reconstructor.model_name # sequence model name
+        # self._decoder_str = self._decoder_model_reconstructor.model_name # decoder model name       
         # self.sensor_summary = None # information about sensors (a pandas dataframe)
         # self.sensor_data = None # raw sensor data, sensors as rows, timesteps as columns
-        # self.random_reconstructor_validation_errors = None
+        # self.reconstructor_validation_errors = None
         # self.sensor_forecaster_validation_errors = None
-        # self.random_reconstructor = None
+        # self.reconstructor = None
         # self._sensor_forecaster = None
         # self._sc_sensors = None
         # self._sc_data = None
@@ -199,9 +199,9 @@ class SHRED(nn.Module):
         # self._data_keys = None # list of keys in 'data' dictionary
         # self._data_spatial_shape = None # spatial shape (all dimensions except the last) of each array in the 'data' dictionary
     
-    def forward(self, x):
-        print("Newest Version")
-        return self.random_reconstructor(x)
+    # def forward(self, x):
+    #     print("Newest Version")
+    #     return self.reconstructor(x)
         # Check if fit() method has been called prior
         # if not self._is_fitted:
         #     raise RuntimeError("The SHRED model must be fit before calling recon().")
@@ -277,7 +277,7 @@ class SHRED(nn.Module):
         #         temp = initial_in.clone()
         #         initial_in[0,:-1] = temp[0,1:]
         #         initial_in[0,-1] = torch.tensor(scaled_sensor_forecast)
-        #     device = 'cuda' if next(self.random_reconstructor.parameters()).is_cuda else 'cpu'
+        #     device = 'cuda' if next(self.reconstructor.parameters()).is_cuda else 'cpu'
         #     sensor_measurements_scaled_all = np.array(vals).T # timesteps as columns
         #     sensor_measurements_scaled = sensor_measurements_scaled_all[:,-(end_time_index - start_time_index) - self._lags - 1:]
         # sensor_measurements_unscaled_recon = self._unscale_sensor_data(sensor_measurements_scaled)
@@ -346,49 +346,49 @@ class SHRED(nn.Module):
             Number of epochs to wait for improvement before early stopping. Default is 20.
         """
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        ########################################### SHRED RANDOM RECONSTRUCTOR #################################################
-        if train_dataset.random_reconstructor_dataset is not None:
-            train_set = train_dataset.random_reconstructor_dataset
-            valid_set = valid_dataset.random_reconstructor_dataset
+        ########################################### SHRED Reconstructor #################################################
+        if train_dataset.reconstructor_dataset is not None:
+            train_set = train_dataset.reconstructor_dataset
+            valid_set = valid_dataset.reconstructor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
             output_size = valid_set.Y.shape[1]
             print('input_size', input_size)
             print('output_size', output_size)
-            print('self._sequence_model_random_reconstructor.output_size', self._sequence_model_random_reconstructor.output_size)
-            self._sequence_model_random_reconstructor.initialize(input_size) # initialize with nsensors
-            self._sequence_model_random_reconstructor.to(device)
-            self._decoder_model_random_reconstructor.initialize(input_size = self._sequence_model_random_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
-            self._decoder_model_random_reconstructor.to(device)
-            self.random_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_random_reconstructor,
-                                                      decoder=self._decoder_model_random_reconstructor).to(device)
-            print("\nFitting Random Reconstructor...")
-            self.random_reconstructor_validation_errors = self.random_reconstructor.fit(model = self.random_reconstructor, train_dataset = train_set, valid_dataset = valid_set,
+            print('self._sequence_model_reconstructor.output_size', self._sequence_model_reconstructor.output_size)
+            self._sequence_model_reconstructor.initialize(input_size) # initialize with nsensors
+            self._sequence_model_reconstructor.to(device)
+            self._decoder_model_reconstructor.initialize(input_size = self._sequence_model_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
+            self._decoder_model_reconstructor.to(device)
+            self.reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_reconstructor,
+                                                      decoder=self._decoder_model_reconstructor).to(device)
+            print("\nFitting Reconstructor...")
+            self.reconstructor_validation_errors = self.reconstructor.fit(model = self.reconstructor, train_dataset = train_set, valid_dataset = valid_set,
                                                                 num_sensors = input_size, output_size = output_size
                                     , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
         
 
-        ########################################### SHRED TEMPORAL RECONSTRUCTOR #################################################
-        if train_dataset.temporal_reconstructor_dataset is not None:
-            train_set = train_dataset.temporal_reconstructor_dataset
-            valid_set = valid_dataset.temporal_reconstructor_dataset
+        ########################################### SHRED Predictor #################################################
+        if train_dataset.predictor_dataset is not None:
+            train_set = train_dataset.predictor_dataset
+            valid_set = valid_dataset.predictor_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
             output_size = valid_set.Y.shape[1]
             print('input_size', input_size)
             print('output_size', output_size)
-            print('self._sequence_model_temporal_reconstructor.output_size', self._sequence_model_temporal_reconstructor.output_size)
-            self._sequence_model_temporal_reconstructor.initialize(input_size) # initialize with nsensors
-            self._sequence_model_temporal_reconstructor.to(device)
-            self._decoder_model_temporal_reconstructor.initialize(input_size = self._sequence_model_temporal_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
-            self._decoder_model_temporal_reconstructor.to(device)
-            self.temporal_reconstructor = RECONSTRUCTOR(sequence=self._sequence_model_temporal_reconstructor,
-                                                        decoder=self._decoder_model_temporal_reconstructor).to(device)
-            print("\nFitting Temporal Reconstructor...")
-            self.temporal_reconstructor_validation_errors = self.temporal_reconstructor.fit(model = self.temporal_reconstructor, train_dataset = train_set, valid_dataset = valid_set,
+            print('self._sequence_model_predictor.output_size', self._sequence_model_predictor.output_size)
+            self._sequence_model_predictor.initialize(input_size) # initialize with nsensors
+            self._sequence_model_predictor.to(device)
+            self._decoder_model_predictor.initialize(input_size = self._sequence_model_predictor.output_size, output_size=output_size) # could pass in entire sequence model
+            self._decoder_model_predictor.to(device)
+            self.predictor = RECONSTRUCTOR(sequence=self._sequence_model_predictor,
+                                                        decoder=self._decoder_model_predictor).to(device)
+            print("\nFitting Predictor...")
+            self.predictor_validation_errors = self.predictor.fit(model = self.predictor, train_dataset = train_set, valid_dataset = valid_set,
                                                                 num_sensors = input_size, output_size = output_size
                                     , batch_size = batch_size, num_epochs = num_epochs, lr = lr, verbose = verbose, patience = patience)
         
         
-        ########################################### SHRED FORECASTER ####################################################
+        ########################################### SHRED Sensor Forecaster ####################################################
         if train_dataset.sensor_forecaster_dataset is not None:
             train_set = train_dataset.sensor_forecaster_dataset
             valid_set = valid_dataset.sensor_forecaster_dataset
@@ -400,7 +400,7 @@ class SHRED(nn.Module):
             self._sequence_model_sensor_forecaster.to(device)
             self._decoder_model_sensor_forecaster.initialize(self._sequence_model_sensor_forecaster.output_size, output_size)
             self._decoder_model_sensor_forecaster.to(device)
-            self.sensor_forecaster = FORECASTER(sequence=self._sequence_model_sensor_forecaster,
+            self.sensor_forecaster = SENSOR_FORECASTER(sequence=self._sequence_model_sensor_forecaster,
                                                 decoder=self._decoder_model_sensor_forecaster).to(device)
             # self.sensor_forecaster = _SHRED_FORECASTER(model=LSTM without decoder)
             print("\nFitting Sensor Forecaster...")
@@ -409,54 +409,62 @@ class SHRED(nn.Module):
                                         lr = lr, verbose = verbose, patience = patience)
             
         result = {}
-        if self.random_reconstructor_validation_errors is not None:
-            result['Random Reconstructor Validation Errors'] = self.random_reconstructor_validation_errors
-        if self.temporal_reconstructor_validation_errors is not None:
-            result['Temporal Reconstructor Validation Errors'] = self.temporal_reconstructor_validation_errors
+        if self.reconstructor_validation_errors is not None:
+            result['Reconstruction Validation Errors'] = self.reconstructor_validation_errors
+        if self.predictor_validation_errors is not None:
+            result['Temporal Reconstructor Validation Errors'] = self.predictor_validation_errors
         if self.sensor_forecaster_validation_errors is not None:
             result['Sensor Forecaster Validation Errors'] = self.sensor_forecaster_validation_errors
 
         return result
 
+    def predict(self, x):
+        return self.predictor(x)
+
+    def reconstruct(self, x):
+        return self.reconstructor(x)
+
+
+    
 
 def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = True):
 
     error_df = pd.DataFrame()
 
-    if shred.random_reconstructor is not None:
-        random_reconstructor_prediction = \
-            shred.random_reconstructor(test_dataset.random_reconstructor_dataset.X).detach().cpu().numpy()
-        random_reconstructor_prediction_postprocess = \
-        data_manager.postprocess(data = random_reconstructor_prediction,
-                                 uncompress = uncompress, unscale = unscale, method = "random_reconstructor")
-        random_reconstructor_truth_postprocess = \
-            data_manager.postprocess(data = test_dataset.random_reconstructor_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, unscale = unscale, method = "random_reconstructor")
-        for key in random_reconstructor_prediction_postprocess:
+    if shred.reconstructor is not None:
+        reconstructor_prediction = \
+            shred.reconstructor(test_dataset.reconstructor_dataset.X).detach().cpu().numpy()
+        reconstructor_prediction_postprocess = \
+        data_manager.postprocess(data = reconstructor_prediction,
+                                 uncompress = uncompress, unscale = unscale, method = "reconstructor")
+        reconstructor_truth_postprocess = \
+            data_manager.postprocess(data = test_dataset.reconstructor_dataset.Y.detach().cpu().numpy(),
+                                    uncompress = uncompress, unscale = unscale, method = "reconstructor")
+        for key in reconstructor_prediction_postprocess:
             error =  l2(
-                torch.tensor(random_reconstructor_truth_postprocess[key]),
-                torch.tensor(random_reconstructor_prediction_postprocess[key])
+                torch.tensor(reconstructor_truth_postprocess[key]),
+                torch.tensor(reconstructor_prediction_postprocess[key])
             )
-            error_df.loc["random reconstructor", key] = error.item()
+            error_df.loc["Reconstruction", key] = error.item()
 
 
-    if shred.temporal_reconstructor is not None:
-        temporal_reconstructor_prediction = \
-            shred.temporal_reconstructor(test_dataset.temporal_reconstructor_dataset.X).detach().cpu().numpy()
-        temporal_reconstructor_prediction_postprocess = \
-            data_manager.postprocess(data = temporal_reconstructor_prediction,
-                                    uncompress = uncompress, unscale = unscale, method = "temporal_reconstructor")
-        temporal_reconstructor_truth_postprocess = \
-            data_manager.postprocess(data = test_dataset.temporal_reconstructor_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, unscale = unscale, method = "temporal_reconstructor")
-        for key in temporal_reconstructor_prediction_postprocess:
+    if shred.predictor is not None:
+        predictor_prediction = \
+            shred.predictor(test_dataset.predictor_dataset.X).detach().cpu().numpy()
+        predictor_prediction_postprocess = \
+            data_manager.postprocess(data = predictor_prediction,
+                                    uncompress = uncompress, unscale = unscale, method = "predictor")
+        predictor_truth_postprocess = \
+            data_manager.postprocess(data = test_dataset.predictor_dataset.Y.detach().cpu().numpy(),
+                                    uncompress = uncompress, unscale = unscale, method = "predictor")
+        for key in predictor_prediction_postprocess:
             error = l2(
-                torch.tensor(temporal_reconstructor_truth_postprocess[key]),
-                torch.tensor(temporal_reconstructor_prediction_postprocess[key])
+                torch.tensor(predictor_truth_postprocess[key]),
+                torch.tensor(predictor_prediction_postprocess[key])
             )
             error_df.loc["temporal reconstructor", key] = error.item()
 
-    if shred.sensor_forecaster is not None and shred.temporal_reconstructor is not None:
+    if shred.sensor_forecaster is not None and shred.predictor is not None:
         test_size = test_dataset.sensor_forecaster_dataset.X.shape[0]
         # forecasts sensor measurements in test set
         sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X)
@@ -480,13 +488,13 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
         )
         print('lagged_sensor_forecaster_prediction', lagged_sensor_forecaster_prediction.shape)
         forecast_prediction = \
-            shred.temporal_reconstructor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
+            shred.predictor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
         forecast_prediction_postprocess = \
             data_manager.postprocess(data = forecast_prediction, uncompress = uncompress,
-                                     unscale = unscale, method = "temporal_reconstructor")
+                                     unscale = unscale, method = "predictor")
         for key in forecast_prediction_postprocess:
             error = l2(
-                torch.tensor(temporal_reconstructor_truth_postprocess[key]),
+                torch.tensor(predictor_truth_postprocess[key]),
                 torch.tensor(forecast_prediction_postprocess[key])
             )
             error_df.loc["forecaster", key] = error.item()
@@ -607,7 +615,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
     #             temp = initial_in.clone()
     #             initial_in[0,:-1] = temp[0,1:]
     #             initial_in[0,-1] = torch.tensor(scaled_sensor_forecast)
-    #         device = 'cuda' if next(self.random_reconstructor.parameters()).is_cuda else 'cpu'
+    #         device = 'cuda' if next(self.reconstructor.parameters()).is_cuda else 'cpu'
     #         sensor_measurements_scaled_all = np.array(vals).T # timesteps as columns
     #         sensor_measurements_scaled = sensor_measurements_scaled_all[:,-(end_time_index - start_time_index) - self._lags - 1:]
     #     sensor_measurements_unscaled_recon = self._unscale_sensor_data(sensor_measurements_scaled)
@@ -637,7 +645,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
     #     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     #     data_in = torch.tensor(data_in, dtype = torch.float32).to(device)
     #     with torch.no_grad():
-    #         recon = self.random_reconstructor(data_in)
+    #         recon = self.reconstructor(data_in)
     #     recon_sensor_data_scaled = recon.detach().cpu().numpy()[:,:num_sensors] # timesteps as rows
     #     recon_fullstate_data_scaled = recon.detach().cpu().numpy()[:,num_sensors:] # timesteps as rows
     #     recon_sensor_data = np.empty_like(recon_sensor_data_scaled.T)
@@ -693,9 +701,9 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
     #     )
     #     summary += f"{'Reconstructor':^60}\n"
     #     f"{'-'*total_width}\n"
-    #     summary +=f"{'Sequence:':<{between_width}}{self.random_reconstructor._sequence_str}\n"
-    #     summary += f"{'Decoder:':<{between_width}}{self.random_reconstructor._decoder_str}\n"
-    #     summary += f"{'Validation Error (L2):':<{between_width}}{self.random_reconstructor._best_L2_error:.3f}\n"
+    #     summary +=f"{'Sequence:':<{between_width}}{self.reconstructor._sequence_str}\n"
+    #     summary += f"{'Decoder:':<{between_width}}{self.reconstructor._decoder_str}\n"
+    #     summary += f"{'Validation Error (L2):':<{between_width}}{self.reconstructor._best_L2_error:.3f}\n"
     #     if self.sensor_forecaster is not None:
     #         summary += f"{'-'*total_width}\n"
     #         summary += f"{'Sensor Forecaster':^60}\n"

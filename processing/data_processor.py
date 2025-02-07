@@ -79,7 +79,8 @@ class SHREDDataProcessor:
         y_train, y_valid, y_test = None, None, None
 
         # Generate dataset for Reconstructor
-        if method == 'random_reconstructor' or method == 'temporal_reconstructor':
+        if method == 'reconstructor' or method == 'predictor':
+            print('hi again')
             # Generate X
             if self.sensor_measurements is not None:
                 if self.scaling is True:
