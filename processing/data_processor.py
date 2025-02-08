@@ -146,11 +146,11 @@ class SHREDDataProcessor:
             self.left_singular_values[method] = U
             self.singular_values[method] = S
             compressed_full_state_data = full_state_data_std_scaled @ V.transpose()
-            scaler = MinMaxScaler()
-            if self.n_components is not None:
-                self.scaler[method] = scaler.fit(compressed_full_state_data[train_indices])
-            else:
-                self.scaler[method] = scaler.fit(self.full_state_data[train_indices])
+        scaler = MinMaxScaler()
+        if self.n_components is not None:
+            self.scaler[method] = scaler.fit(compressed_full_state_data[train_indices])
+        else:
+            self.scaler[method] = scaler.fit(self.full_state_data[train_indices])
 
     def transform(self, method):
         """
