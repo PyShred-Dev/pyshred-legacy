@@ -307,7 +307,7 @@ class SHRED():
 
     
 
-def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = True):
+def evaluate(shred, test_dataset, data_manager, uncompress = True):
 
     error_df = pd.DataFrame()
 
@@ -316,10 +316,10 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
             shred.reconstructor(test_dataset.reconstructor_dataset.X).detach().cpu().numpy()
         reconstructor_prediction_postprocess = \
         data_manager.postprocess(data = reconstructor_prediction,
-                                 uncompress = uncompress, unscale = unscale, method = "reconstructor")
+                                 uncompress = uncompress, method = "reconstructor")
         reconstructor_truth_postprocess = \
             data_manager.postprocess(data = test_dataset.reconstructor_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, unscale = unscale, method = "reconstructor")
+                                    uncompress = uncompress, method = "reconstructor")
         for key in reconstructor_prediction_postprocess:
             error =  l2(
                 torch.tensor(reconstructor_truth_postprocess[key]),
@@ -333,10 +333,10 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
             shred.predictor(test_dataset.predictor_dataset.X).detach().cpu().numpy()
         predictor_prediction_postprocess = \
             data_manager.postprocess(data = predictor_prediction,
-                                    uncompress = uncompress, unscale = unscale, method = "predictor")
+                                    uncompress = uncompress, method = "predictor")
         predictor_truth_postprocess = \
             data_manager.postprocess(data = test_dataset.predictor_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, unscale = unscale, method = "predictor")
+                                    uncompress = uncompress, method = "predictor")
         for key in predictor_prediction_postprocess:
             error = l2(
                 torch.tensor(predictor_truth_postprocess[key]),
@@ -367,8 +367,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
         forecast_prediction = \
             shred.predictor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
         forecast_prediction_postprocess = \
-            data_manager.postprocess(data = forecast_prediction, uncompress = uncompress,
-                                     unscale = unscale, method = "predictor")
+            data_manager.postprocess(data = forecast_prediction, uncompress = uncompress, method = "predictor")
         for key in forecast_prediction_postprocess:
             error = l2(
                 torch.tensor(predictor_truth_postprocess[key]),
@@ -380,10 +379,10 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True, unscale = Tru
         sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
         sensor_forecaster_prediction_postprocess = \
             data_manager.postprocess(data = sensor_forecaster_prediction,
-                                     uncompress = uncompress, unscale = unscale, method = "sensor_forecaster")
+                                     uncompress = uncompress, method = "sensor_forecaster")
         sensor_forecaster_truth_postprocess = \
             data_manager.postprocess(data = test_dataset.sensor_forecaster_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, unscale = unscale, method = "sensor_forecaster")
+                                    uncompress = uncompress, method = "sensor_forecaster")
         for key in sensor_forecaster_prediction_postprocess:
             error = l2(
                 torch.tensor(sensor_forecaster_truth_postprocess[key]),
