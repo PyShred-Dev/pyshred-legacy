@@ -248,7 +248,7 @@ class SHREDDataManager:
         return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
 
 
-    def postprocess(self, data, uncompress = True, method = None):
+    def postprocess(self, data, method, uncompress = True):
         results = {}
         start_index = 0
         for data_processor in self.data_processors:
@@ -262,20 +262,21 @@ class SHREDDataManager:
         return results
 
 
-    def generate_X(self, start = None, end = None, measurements = None, time = None, forecaster=None, method = None):
+    def generate_X(self, method, start = None, end = None, measurements = None, time = None, forecaster=None):
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
         if start is None and end is None:
             # generate lagged sequences from measurements
             for data_processor in self.data_processors:
-                end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
-                result = data_processor.transform_X(measurements[:,start_sensor:end_sensor], method = method)
-                if results is None:
-                    results = result
-                else:
-                    results = np.concatenate((results, result), axis = 1)
-                start_sensor = end_sensor
+                if data_processor.sensor_measurements is not None:
+                    end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
+                    result = data_processor.transform_X(measurements[:,start_sensor:end_sensor], method = method)
+                    if results is None:
+                        results = result
+                    else:
+                        results = np.concatenate((results, result), axis = 1)
+                    start_sensor = end_sensor
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
         else:
             # generate lagged sequences from start to end (inclusive)
