@@ -248,7 +248,7 @@ class SHREDDataManager:
         return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
 
 
-    def postprocess(self, data, method, uncompress = True):
+    def postprocess_sensor_measurements(self, data, method, uncompress = True):
         if method == 'sensor_forecaster':
             results = None
         else:
@@ -275,6 +275,22 @@ class SHREDDataManager:
                 field_data = data_processor.inverse_transform(field_data, uncompress, method)
                 results[data_processor.id] = field_data
         return results
+
+    def postprocess(self, data, method, uncompress = True):
+        results = {}
+        start_index = 0
+        for data_processor in self.data_processors:
+            field_spatial_dim = data_processor.Y_spatial_dim
+            field_data = data[:, start_index:start_index+field_spatial_dim]
+            if isinstance(data, torch.Tensor):
+                field_data = field_data.detach().cpu().numpy()
+            start_index = field_spatial_dim + start_index
+            field_data = data_processor.inverse_transform(field_data, uncompress, method)
+            results[data_processor.id] = field_data
+        return results
+
+
+
 
 
     def generate_X(self, method, start = None, end = None, measurements = None, time = None, forecaster=None):
@@ -322,7 +338,7 @@ class SHREDDataManager:
             # if no forecaster, replace gaps with zeros
             else:
                 results[gap_indices] = 0
-            results_sensor_measurements = self.postprocess(data = results, method = 'sensor_forecaster')
+            results_sensor_measurements = self.postprocess_sensor_measurements(data = results, method = 'sensor_forecaster')
             results_sensor_measurements = np.concatenate((np.zeros((self.lags, results_sensor_measurements.shape[1])), results_sensor_measurements), axis = 0)
             results_sensor_measurements = results[start:end+self.lags+1,:,:]
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
