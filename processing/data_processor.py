@@ -171,8 +171,10 @@ class SHREDDataProcessor:
         Expects data to be a np array with time on axis 0.
         (Field specific output fron SHRED/Reconstructor)
         """
-        # unscale data
-        data = self.scaler[method].inverse_transform(data)
+        # unscale data if scaler exists
+        # (may not exist for sensor_forecaster for some fields)
+        if self.scaler.get(method) is not None:
+            data = self.scaler[method].inverse_transform(data)
 
         # uncompress data
         if method == 'predictor' or method == 'reconstructor':
