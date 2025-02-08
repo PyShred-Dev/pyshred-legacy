@@ -323,6 +323,8 @@ class SHREDDataManager:
             else:
                 results[gap_indices] = 0
             results_sensor_measurements = self.postprocess(data = results, method = 'sensor_forecaster')
+            results_sensor_measurements = np.concatenate((np.zeros((self.lags, results_sensor_measurements.shape[1])), results_sensor_measurements), axis = 0)
+            results_sensor_measurements = results[start:end+self.lags+1,:,:]
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
             results = results[start:end+1,:,:]
         results = torch.tensor(results, dtype=torch.float32, device=device)
