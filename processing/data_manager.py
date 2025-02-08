@@ -262,6 +262,7 @@ class SHREDDataManager:
                     # print(data_processor.sensor_measurements)
                     # if data_processor.sensor_measurements is not None:
                     num_sensors = data_processor.sensor_measurements.shape[0]
+                    print({start_index},' ',{start_index+num_sensors})
                     result = data[:, start_index:start_index+num_sensors]
                     start_index += start_index
                     result = data_processor.inverse_transform(result, uncompress, method)
