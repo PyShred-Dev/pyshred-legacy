@@ -11,7 +11,7 @@ class SHREDDataProcessor:
     generate_dataset: generates 
     """
 
-    def __init__(self, data, random_sensors, stationary_sensors, mobile_sensors, lags, time, compression, scaling, id):
+    def __init__(self, data, random_sensors, stationary_sensors, mobile_sensors, lags, time, compression, id):
         """
         Inputs:
         - data: file path to a .npz file. (string)
@@ -23,7 +23,6 @@ class SHREDDataProcessor:
         - time: 1D numpy array of timestamps
         - lags: number of time steps to look back (integer).
         - compression: dimensionality reduction (boolean or integer).
-        - scaling: scaling settings ('minmax', 'standard').
         - id: unique identifier for the dataset (string).
         """
         if compression == True:
@@ -39,7 +38,6 @@ class SHREDDataProcessor:
         self.mobile_sensors = mobile_sensors # mobile sensor locations
         self.lags = lags # number of timesteps to look back
         self.time = time # numpy array of time stamps associated with `data`
-        self.scaling = scaling
         self.compression = compression
         self.sensor_scaler = {}
         self.transformed_sensor_data = {}
@@ -82,12 +80,9 @@ class SHREDDataProcessor:
         if method == 'reconstructor' or method == 'predictor':
             # Generate X
             if self.sensor_measurements is not None:
-                if self.scaling is True:
-                    self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
-                    self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
-                    lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
-                else:
-                    lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.sensor_measurements, self.lags)
+                self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
+                self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
+                lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
                 X_train = lagged_sensor_sequences[train_indices]
                 X_val = lagged_sensor_sequences[val_indices]
                 X_test = lagged_sensor_sequences[test_indices]
@@ -109,12 +104,9 @@ class SHREDDataProcessor:
         elif method == "sensor_forecaster":
             # Generate X
             if self.sensor_measurements is not None:
-                if self.scaling is True:
-                    self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
-                    self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
-                    lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
-                else:
-                    lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.sensor_measurements, self.lags)
+                self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
+                self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
+                lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
 
                 X_train = lagged_sensor_sequences[train_indices, :,:]
                 y_train = lagged_sensor_sequences[train_indices+1,-1,:]
@@ -139,7 +131,6 @@ class SHREDDataProcessor:
         Input: train_indices and method ("random" or "sequential")
         Expects self.data to be flattened with time on axis 0.
         Compression: fits standard scaler and save left singular values and singular values
-        Scaling: fits either MinMaxScaler or Standard Scaler.
         Stores fitted scalers as object attributes.
         """
         # compression
@@ -155,7 +146,6 @@ class SHREDDataProcessor:
             self.left_singular_values[method] = U
             self.singular_values[method] = S
             compressed_full_state_data = full_state_data_std_scaled @ V.transpose()
-        if self.scaling is True:
             scaler = MinMaxScaler()
             if self.n_components is not None:
                 self.scaler[method] = scaler.fit(compressed_full_state_data[train_indices])
@@ -173,23 +163,18 @@ class SHREDDataProcessor:
             transformed_data = transformed_data @ np.transpose(self.right_singular_values.get(method))
         else:
             transformed_data = self.full_state_data
-        # Perform scaling if all scaler-related attributes exist
-        if self.scaler.get(method) is not None:
-            self.transformed_data[method] = self.scaler[method].transform(transformed_data)
-        else:
-            self.transformed_data[method] = transformed_data
+        self.transformed_data[method] = self.scaler[method].transform(transformed_data)
 
     
-    def inverse_transform(self, data, uncompress, unscale, method):
+    def inverse_transform(self, data, uncompress, method):
         """
         Expects data to be a np array with time on axis 0.
         (Field specific output fron SHRED/Reconstructor)
         """
-        # check if scaler fitted on reconstructor is not None
-        if self.scaler.get(method) is not None and unscale is True:
-            data = self.scaler[method].inverse_transform(data)
+        # unscale data
+        data = self.scaler[method].inverse_transform(data)
 
-        # check if compression is None
+        # uncompress data
         if method == 'predictor' or method == 'reconstructor':
             if self.right_singular_values.get(method) is not None and uncompress is True:
                 data = data @ self.right_singular_values.get(method)

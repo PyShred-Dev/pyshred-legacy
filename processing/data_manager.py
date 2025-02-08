@@ -23,8 +23,7 @@ class SHREDDataManager:
     }
 
 
-    def __init__(self, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15, scaling = True, compression = True, method = 'all'):
-        self.scaling = scaling
+    def __init__(self, lags = 20, time = None, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True, method = 'all'):
         self.compression = compression
         self.time = time # expects a 1D numpy array
         self.lags = lags # number of time steps to look back
@@ -48,7 +47,7 @@ class SHREDDataManager:
         # self.reconstructor = reconstructor # flag for generating datasets for SHRED reconstructor
         # self.forecastor = forecastor # flag for generating datasets for SHRED forecaster
 
-    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, scaling = None, time = None):
+    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, time = None):
         """
         Creates and adds a new SHREDDataProcessor object.
         - file path: file path to data (string)
@@ -60,11 +59,9 @@ class SHREDDataManager:
         - time: 1D numpy array of timestamps
         - lags: number of time steps to look back (integer).
         - compression: dimensionality reduction (boolean or integer).
-        - scaling: scaling settings ('minmax', 'standard').
         - id: unique identifier for the dataset (string).
         """
         compression = compression if compression is not None else self.compression
-        scaling = scaling if scaling is not None else self.scaling
         time = time if time is not None else self.time
 
 
@@ -77,7 +74,6 @@ class SHREDDataManager:
             lags=self.lags,
             time=time,
             compression=compression,
-            scaling=scaling,
             id=id
         )
 
