@@ -266,12 +266,13 @@ class SHREDDataManager:
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
-        if start is None and end is None:
-            # generate lagged sequences from measurements
+        # generate lagged sequences using only inputted measurements
+        if start is None and end is None and measurements is not None:
             for data_processor in self.data_processors:
                 if data_processor.sensor_measurements is not None:
                     end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
-                    result = data_processor.transform_X(measurements[:,start_sensor:end_sensor], method = method)
+                    field_measurements = measurements[:,start_sensor:end_sensor]
+                    result = data_processor.transform_X(field_measurements, method = method)
                     if results is None:
                         results = result
                     else:
@@ -283,11 +284,12 @@ class SHREDDataManager:
             for data_processor in self.data_processors:
                 if data_processor.sensor_measurements is not None:
                     end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
-                    if measurements is not None:
+                    # incorporate sensor measurments and associated time provided by user
+                    if measurements is not None and time is not None:
                         field_measurements = measurements[:,start_sensor:end_sensor]
                         result = data_processor.generate_X(end = end, measurements = field_measurements, time = time, method = method)
                     else:
-                        result = data_processor.generate_X(end = end, measurements = None, time = time, method = method)
+                        result = data_processor.generate_X(end = end, measurements = None, time = None, method = method)
                     if results is None:
                         results = result
                     else:
@@ -305,7 +307,10 @@ class SHREDDataManager:
             # if no forecaster, replace gaps with zeros
             else:
                 results[gap_indices] = 0
+            results_sensor_measurements = self.postprocess(data = results, method = 'sensor_forecaster')
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
             results = results[start:end+1,:,:]
         results = torch.tensor(results, dtype=torch.float32, device=device)
-        return results
+        return {'X': results,
+                'sensor_measurements':results_sensor_measurements
+                }
