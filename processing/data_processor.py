@@ -165,7 +165,7 @@ class SHREDDataProcessor:
             transformed_data = self.full_state_data
         self.transformed_data[method] = self.scaler[method].transform(transformed_data)
 
-    
+
     def inverse_transform(self, data, uncompress, method):
         """
         Expects data to be a np array with time on axis 0.
@@ -185,7 +185,7 @@ class SHREDDataProcessor:
         return data
 
 
-    
+
     def generate_y_forecaster_train_val_test(self, X_train, X_val, X_test): 
         train = X_train[1:, -1, :]  # Use the sensor measurements at the next timestep (1399, 5)
         val = X_val[1:, -1, :]

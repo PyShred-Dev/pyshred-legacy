@@ -249,16 +249,30 @@ class SHREDDataManager:
 
 
     def postprocess(self, data, method, uncompress = True):
-        results = {}
+        if method == 'sensor_forecaster':
+            results = None
+        else:
+            results = {}
         start_index = 0
         for data_processor in self.data_processors:
-            field_spatial_dim = data_processor.Y_spatial_dim
-            field_data = data[:, start_index:start_index+field_spatial_dim]
-            if isinstance(data, torch.Tensor):
-                field_data = field_data.detach().cpu().numpy()
-            start_index = field_spatial_dim + start_index
-            field_data = data_processor.inverse_transform(field_data, uncompress, method)
-            results[data_processor.id] = field_data
+            if method == 'sensor_forecaster':
+                if data_processor.sensor_measurements is not None:
+                    num_sensors = data_processor.sensor_measurements.shape[0]
+                    result = data[:, start_index:start_index+num_sensors]
+                    start_index += start_index
+                    result = data_processor.inverse_transform(result, uncompress, method)
+                    if results is None:
+                        results = result
+                    else:
+                        results = np.concatenate((results, result), axis=1)
+            else:
+                field_spatial_dim = data_processor.Y_spatial_dim
+                field_data = data[:, start_index:start_index+field_spatial_dim]
+                if isinstance(data, torch.Tensor):
+                    field_data = field_data.detach().cpu().numpy()
+                start_index += field_spatial_dim
+                field_data = data_processor.inverse_transform(field_data, uncompress, method)
+                results[data_processor.id] = field_data
         return results
 
 
