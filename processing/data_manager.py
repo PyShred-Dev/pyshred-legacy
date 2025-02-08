@@ -340,11 +340,12 @@ class SHREDDataManager:
                 results[gap_indices] = 0
             results_sensor_measurements = self.postprocess_sensor_measurements(data = results, method = 'sensor_forecaster')
             results_sensor_measurements = np.concatenate((np.zeros((self.lags, results_sensor_measurements.shape[1])), results_sensor_measurements), axis = 0)
-            print('results_sensor_measurements',results_sensor_measurements.shape)
-            results_sensor_measurements = results[start:end+self.lags+1,:].copy()
-            print('start',start)
-            print('end+self.lags+1',end+self.lags+1)
-            print('results_sensor_measurements',results_sensor_measurements.shape)
+            # print('results_sensor_measurements',results_sensor_measurements.shape)
+            # print('start',start)
+            # print('end+self.lags+1',end+self.lags+1)
+            results_sensor_measurements = results_sensor_measurements[start:end+self.lags+1,:]
+
+            # print('results_sensor_measurements',results_sensor_measurements.shape)
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
             results = results[start:end+1,:,:]
 
