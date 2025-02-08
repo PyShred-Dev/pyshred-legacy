@@ -255,8 +255,8 @@ class SHREDDataManager:
             results = {}
         start_index = 0
         for data_processor in self.data_processors:
-            print('hi')
             if method == 'sensor_forecaster' and data_processor.sensor_measurements is not None:
+                print('1')
                 # print(type(data_processor.sensor_measurements))
                 # print(data_processor.sensor_measurements)
                 # if data_processor.sensor_measurements is not None:
@@ -269,6 +269,7 @@ class SHREDDataManager:
                 else:
                     results = np.concatenate((results, result), axis=1)
             else:
+                print('2')
                 field_spatial_dim = data_processor.Y_spatial_dim
                 field_data = data[:, start_index:start_index+field_spatial_dim]
                 if isinstance(data, torch.Tensor):
