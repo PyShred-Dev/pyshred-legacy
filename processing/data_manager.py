@@ -1,8 +1,5 @@
-
-
-
 import torch
-from .utils import * 
+from .utils import *
 from .data_processor import *
 
 class SHREDDataManager:
@@ -39,13 +36,9 @@ class SHREDDataManager:
         self.reconstructor = []
         self.sensor_forecaster = []
         self.predictor = []
-        # self.reconstructor_flag = reconstructor
-        # self.forecastor_flag = forecastor
         self.input_summary = None #
         self.sensor_measurements = None # all sensor measurement
         self.method = method
-        # self.reconstructor = reconstructor # flag for generating datasets for SHRED reconstructor
-        # self.forecastor = forecastor # flag for generating datasets for SHRED forecaster
 
     def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, time = None):
         """
@@ -255,7 +248,7 @@ class SHREDDataManager:
         return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
 
 
-    def postprocess(self, data, uncompress = True, unscale = True, method = None):
+    def postprocess(self, data, uncompress = True, method = None):
         results = {}
         start_index = 0
         for data_processor in self.data_processors:
@@ -264,7 +257,7 @@ class SHREDDataManager:
             if isinstance(data, torch.Tensor):
                 field_data = field_data.detach().cpu().numpy()
             start_index = field_spatial_dim + start_index
-            field_data = data_processor.inverse_transform(field_data, uncompress, unscale, method)
+            field_data = data_processor.inverse_transform(field_data, uncompress, method)
             results[data_processor.id] = field_data
         return results
 
