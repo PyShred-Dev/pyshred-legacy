@@ -255,16 +255,19 @@ class SHREDDataManager:
             results = {}
         start_index = 0
         for data_processor in self.data_processors:
-            if method == 'sensor_forecaster':
-                if data_processor.sensor_measurements is not None:
-                    num_sensors = data_processor.sensor_measurements.shape[0]
-                    result = data[:, start_index:start_index+num_sensors]
-                    start_index += start_index
-                    result = data_processor.inverse_transform(result, uncompress, method)
-                    if results is None:
-                        results = result
-                    else:
-                        results = np.concatenate((results, result), axis=1)
+            print('hi')
+            if method == 'sensor_forecaster' and data_processor.sensor_measurements is not None:
+                # print(type(data_processor.sensor_measurements))
+                # print(data_processor.sensor_measurements)
+                # if data_processor.sensor_measurements is not None:
+                num_sensors = data_processor.sensor_measurements.shape[0]
+                result = data[:, start_index:start_index+num_sensors]
+                start_index += start_index
+                result = data_processor.inverse_transform(result, uncompress, method)
+                if results is None:
+                    results = result
+                else:
+                    results = np.concatenate((results, result), axis=1)
             else:
                 field_spatial_dim = data_processor.Y_spatial_dim
                 field_data = data[:, start_index:start_index+field_spatial_dim]
