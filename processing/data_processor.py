@@ -75,18 +75,35 @@ class SHREDDataProcessor:
         """
         X_train, X_val, X_test = None, None, None
         y_train, y_val, y_test = None, None, None
+        is_sensor_forecaster = False
+        # # Generate dataset for Reconstructor
+        # if method == 'reconstructor' or method == 'predictor':
+        # Generate X
+        if self.sensor_measurements is not None:
+            if method == "sensor_forecaster":
+                method == "predictor" # sensor_forecaster uses same train_indices as predictor, thus same scalers
+                is_sensor_forecaster = True
+            self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
+            self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
+            if is_sensor_forecaster is True:
+                lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
+                X_train = lagged_sensor_sequences[train_indices, :,:]
+                y_train = lagged_sensor_sequences[train_indices+1,-1,:]
+                X_val = lagged_sensor_sequences[val_indices, :, :]
+                y_val = lagged_sensor_sequences[val_indices+1,-1,:]
+                X_test = lagged_sensor_sequences[test_indices, :, :]
+                y_test = lagged_sensor_sequences[test_indices+1,-1,:]
+                return {
+                    'train': (X_train, y_train),
+                    'val': (X_val, y_val),
+                    'test': (X_test, y_test)
+                }
+            lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
+            X_train = lagged_sensor_sequences[train_indices]
+            X_val = lagged_sensor_sequences[val_indices]
+            X_test = lagged_sensor_sequences[test_indices]
 
-        # Generate dataset for Reconstructor
-        if method == 'reconstructor' or method == 'predictor':
-            # Generate X
-            if self.sensor_measurements is not None:
-                self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
-                self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
-                lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
-                X_train = lagged_sensor_sequences[train_indices]
-                X_val = lagged_sensor_sequences[val_indices]
-                X_test = lagged_sensor_sequences[test_indices]
-
+        if method == 'reconstructor' or (method == 'predictor' and is_sensor_forecaster is False):
             # Generate Y
             # flattens full state data into into 2D array with time along axis 0.
             self.full_state_data = flatten(self.full_state_data)
@@ -100,22 +117,25 @@ class SHREDDataProcessor:
             self.Y_spatial_dim = y_train.shape[1]
             self.full_state_data = unflatten(data = self.full_state_data, spatial_shape=self.data_spatial_shape)
 
-        # Generate Y for Forecaster
-        elif method == "sensor_forecaster":
-            # Generate X
-            if self.sensor_measurements is not None:
-                self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
-                self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
-                lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
+        # # Generate Y for Forecaster
+        # elif method == "sensor_forecaster":
+        #     method = "predictor" # uses same scaler as predictor
+        #     # Generate X
+        #     if self.sensor_measurements is not None:
+        #         if self.sensor_scaler.get(method) is None:
+        #             self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
+                
+        #         self.transformed_sensor_data["predictor"] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
+        #         lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
 
-                X_train = lagged_sensor_sequences[train_indices, :,:]
-                y_train = lagged_sensor_sequences[train_indices+1,-1,:]
+        #         X_train = lagged_sensor_sequences[train_indices, :,:]
+        #         y_train = lagged_sensor_sequences[train_indices+1,-1,:]
 
-                X_val = lagged_sensor_sequences[val_indices, :, :]
-                y_val = lagged_sensor_sequences[val_indices+1,-1,:]
+        #         X_val = lagged_sensor_sequences[val_indices, :, :]
+        #         y_val = lagged_sensor_sequences[val_indices+1,-1,:]
 
-                X_test = lagged_sensor_sequences[test_indices, :, :]
-                y_test = lagged_sensor_sequences[test_indices+1,-1,:]
+        #         X_test = lagged_sensor_sequences[test_indices, :, :]
+        #         y_test = lagged_sensor_sequences[test_indices+1,-1,:]
 
         return {
             'train': (X_train, y_train),
@@ -202,7 +222,7 @@ class SHREDDataProcessor:
         Gaps are filled with np.nan.
         """
         timesteps = end+1 # end_time inclusive
-        nsensors = self.sensor_measurements.shape[1] # make sure measurements dim matches
+        nsensors = self.sensor_measurements.shape[1] # make sure measurements dim elf.atches
         complete_measurements = np.full((timesteps, nsensors), np.nan)
         if timesteps > len(self.sensor_measurements):
             complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements

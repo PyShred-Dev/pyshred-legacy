@@ -16,7 +16,7 @@ class SHREDDataManager:
         'all': ['reconstructor', 'predictor', 'sensor_forecaster'],
         'reconstruct': ['reconstructor'],
         'predict': ['predictor'],
-        'forecast': ['sensor_forecaster', 'predictor']
+        'forecast': ['predictor', 'sensor_forecaster']
     }
 
 
