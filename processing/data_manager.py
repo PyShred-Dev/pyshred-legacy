@@ -309,16 +309,16 @@ class SHREDDataManager:
 
 
 
-    def generate_X(self, method, start = None, end = None, measurements = None, time = None, forecaster=None, return_sensor_measurements = False):
+    def generate_X(self, method, start = None, end = None, sensor_measurements = None, time = None, forecaster=None, return_sensor_measurements = False):
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
-        # generate lagged sequences using only inputted measurements
-        if start is None and end is None and measurements is not None:
+        # generate lagged sequences using only inputted sensor_measurements
+        if start is None and end is None and sensor_measurements is not None:
             for data_processor in self.data_processors:
                 if data_processor.sensor_measurements is not None:
                     end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
-                    field_measurements = measurements[:,start_sensor:end_sensor]
+                    field_measurements = sensor_measurements[:,start_sensor:end_sensor]
                     result = data_processor.transform_X(field_measurements, method = method)
                     if results is None:
                         results = result
@@ -333,11 +333,11 @@ class SHREDDataManager:
                 if data_processor.sensor_measurements is not None:
                     end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
                     # incorporate sensor measurments and associated time provided by user
-                    if measurements is not None and time is not None:
-                        field_measurements = measurements[:,start_sensor:end_sensor]
-                        result = data_processor.generate_X(end = end, measurements = field_measurements, time = time, method = method)
+                    if sensor_measurements is not None and time is not None:
+                        field_measurements = sensor_measurements[:,start_sensor:end_sensor]
+                        result = data_processor.generate_X(end = end, sensor_measurements = field_measurements, time = time, method = method)
                     else:
-                        result = data_processor.generate_X(end = end, measurements = None, time = None, method = method)
+                        result = data_processor.generate_X(end = end, sensor_measurements = None, time = None, method = method)
                     if results is None:
                         results = result
                     else:
