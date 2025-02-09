@@ -198,7 +198,7 @@ class SHREDDataProcessor:
             method = 'predictor'
             is_sensor_forecaster = True
         if self.scaler.get(method) is not None:
-            data = self.scaler[method].inverse_transform(data)
+            data = self.sensor_scaler[method].inverse_transform(data)
 
         # uncompress data
         if (method == 'predictor' and is_sensor_forecaster is False) or method == 'reconstructor':
