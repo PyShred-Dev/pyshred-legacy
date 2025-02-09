@@ -193,19 +193,18 @@ class SHREDDataProcessor:
         """
         # unscale data if scaler exists
         # (may not exist for sensor_forecaster for some fields)
-        is_sensor_forecaster = False
-        if method == 'sensor_forecaster': # sensor_forecaster uses same scaler as predictor
-            method = 'predictor'
-            is_sensor_forecaster = True
         if self.scaler.get(method) is not None:
-            data = self.sensor_scaler[method].inverse_transform(data)
-
+            data = self.scaler[method].inverse_transform(data)
         # uncompress data
-        if (method == 'predictor' and is_sensor_forecaster is False) or method == 'reconstructor':
-            if self.right_singular_values.get(method) is not None and uncompress is True:
-                data = data @ self.right_singular_values.get(method)
-                data = self.scaler_before_svd[method].inverse_transform(data)
-                data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
+        if self.right_singular_values.get(method) is not None and uncompress is True:
+            data = data @ self.right_singular_values.get(method)
+            data = self.scaler_before_svd[method].inverse_transform(data)
+            data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
+        return data
+    
+    def inverse_transform_sensor_measurements(self, data, method):
+        if self.sensor_scaler.get(method) is not None:
+            data = self.sensor_scaler[method].inverse_transform(data)
         return data
 
 
