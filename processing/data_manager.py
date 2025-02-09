@@ -309,6 +309,7 @@ class SHREDDataManager:
                     else:
                         results = np.concatenate((results, result), axis = 1)
                     start_sensor = end_sensor
+            results_sensor_measurements = np.concatenate((np.zeros((self.lags, results.shape[1])), results), axis = 0)
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
         else:
             # generate lagged sequences from start to end (inclusive)
