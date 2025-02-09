@@ -181,7 +181,7 @@ class SHREDDataProcessor:
             if self.right_singular_values.get(method) is not None and uncompress is True:
                 data = data @ self.right_singular_values.get(method)
                 data = self.scaler_before_svd[method].inverse_transform(data)
-            data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
+                data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
         return data
 
 
