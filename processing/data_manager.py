@@ -261,7 +261,7 @@ class SHREDDataManager:
                     print({start_index},' ',{start_index+num_sensors})
                     result = data[:, start_index:start_index+num_sensors]
                     start_index += start_index
-                    result = data_processor.inverse_transform(result, uncompress, method)
+                    result = data_processor.inverse_transform(result, uncompress = False, method = "predictor")
                     if results is None:
                         results = result
                     else:
@@ -293,7 +293,7 @@ class SHREDDataManager:
 
 
 
-    def generate_X(self, method, start = None, end = None, measurements = None, time = None, forecaster=None):
+    def generate_X(self, method, start = None, end = None, measurements = None, time = None, forecaster=None, return_sensor_measurements = False):
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
@@ -340,6 +340,9 @@ class SHREDDataManager:
             else:
                 results[gap_indices] = 0
             results_sensor_measurements = self.postprocess_sensor_measurements(data = results, method = 'sensor_forecaster')
+            
+            
+            
             results_sensor_measurements = np.concatenate((np.zeros((self.lags, results_sensor_measurements.shape[1])), results_sensor_measurements), axis = 0)
             # print('results_sensor_measurements',results_sensor_measurements.shape)
             # print('start',start)
@@ -351,6 +354,10 @@ class SHREDDataManager:
             results = results[start:end+1,:,:]
 
         results = torch.tensor(results, dtype=torch.float32, device=device)
-        return {'X': results,
+        if return_sensor_measurements:
+            return {
+                'X': results,
                 'sensor_measurements':results_sensor_measurements
-                }
+            }
+        else:
+            return results
