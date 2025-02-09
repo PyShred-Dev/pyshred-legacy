@@ -26,7 +26,7 @@ class SHREDDataProcessor:
         - id: unique identifier for the dataset (string).
         """
         if compression == True:
-            self.n_components = 20
+            self.n_components = 50
         elif compression == False:
             self.n_components = None
         elif isinstance(compression, int):
@@ -81,7 +81,7 @@ class SHREDDataProcessor:
         # Generate X
         if self.sensor_measurements is not None:
             if method == "sensor_forecaster":
-                method == "predictor" # sensor_forecaster uses same train_indices as predictor, thus same scalers
+                method = "predictor" # sensor_forecaster uses same train_indices as predictor, thus same scalers
                 is_sensor_forecaster = True
             self.sensor_scaler[method] = fit_sensors(train_indices = train_indices, sensor_measurements=self.sensor_measurements)
             self.transformed_sensor_data[method] = transform_sensor(self.sensor_scaler[method], self.sensor_measurements)
