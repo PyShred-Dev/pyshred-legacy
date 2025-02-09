@@ -261,7 +261,7 @@ class SHREDDataManager:
                     print({start_index},' ',{start_index+num_sensors})
                     result = data[:, start_index:start_index+num_sensors]
                     start_index += start_index
-                    result = data_processor.inverse_transform(result, uncompress = False, method = "predictor")
+                    result = data_processor.inverse_transform(result, uncompress = False, method = method)
                     if results is None:
                         results = result
                     else:
