@@ -93,10 +93,14 @@ class ParametricSHREDDataProcessor:
         self.nsensors = self.sensor_measurements.shape[2]
 
         if self.params is not None:
-            param_dfs_list = [
-                pd.DataFrame(self.params[i], columns=[f"{self.id} param {j}" for j in range(self.params.shape[2])])
-                for i in range(self.params.shape[0])
-            ]
+            param_dfs_list = []
+            for i in range(self.params.shape[0]):
+                df = pd.DataFrame(
+                    self.params[i],
+                    columns=[f"{self.id} param {j}" for j in range(self.params.shape[2])]
+                )
+                df.insert(0, "trajectory", i)
+                param_dfs_list.append(df)
             self.params_pd = pd.concat(param_dfs_list, axis=0, ignore_index=True)
 
 
