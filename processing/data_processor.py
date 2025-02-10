@@ -186,7 +186,7 @@ class SHREDDataProcessor:
         return data
 
 
-    def generate_X(self, end, measurements, time, method):
+    def generate_X(self, end, sensor_measurements, time, method):
         """
         Generates sensor measurements from time = 0
         to time = end. Uses given measurements as
@@ -200,10 +200,10 @@ class SHREDDataProcessor:
             complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements
         else:
             complete_measurements[0:timesteps,:] = self.sensor_measurements[0:timesteps,:]
-        if measurements is not None and time is not None:
+        if sensor_measurements is not None and time is not None:
             for i in range(len(time)):
                 if time[i] < complete_measurements.shape[0]:
-                    complete_measurements[time[i],:] = measurements[i,:]
+                    complete_measurements[time[i],:] = sensor_measurements[i,:]
         complete_measurements = self.sensor_scaler[method].transform(complete_measurements)
         return complete_measurements
 
