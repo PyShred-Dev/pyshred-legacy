@@ -299,10 +299,10 @@ class SHRED():
         return result
 
     def predict(self, x):
-        return self.predictor(x)
+        return self.predictor(x).detach().cpu().numpy()
 
     def reconstruct(self, x):
-        return self.reconstructor(x)
+        return self.reconstructor(x).detach().cpu().numpy()
 
 
     
