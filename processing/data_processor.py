@@ -175,7 +175,9 @@ class SHREDDataProcessor:
         if self.right_singular_values.get(method) is not None and uncompress is True:
             data = data @ self.right_singular_values.get(method)
             data = self.scaler_before_svd[method].inverse_transform(data)
-            data = unflatten(data = data, spatial_shape=self.data_spatial_shape)
+            return unflatten(data = data, spatial_shape=self.data_spatial_shape)
+        if self.compression is False:
+            return unflatten(data = data, spatial_shape=self.data_spatial_shape)
         return data
     
     def inverse_transform_sensor_measurements(self, data, method):
