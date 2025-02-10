@@ -74,16 +74,20 @@ def get_train_val_test_indices(n, train_size, val_size, test_size, method):
 
 def get_data(data):
     """
-    Takes in a file_path or a numpy array
-    Returns a single numpy array
+    Takes in a file path (.npy or .npz) or a numpy array.
+    Returns a single numpy array.
     """
-    if isinstance(data, str) and data.endswith('.npz'):
-        return get_data_npz(data)
+    if isinstance(data, str):  # If input is a file path
+        if data.endswith('.npz'):
+            return get_data_npz(data)
+        elif data.endswith('.npy'):
+            return get_data_npy(data)
+        else:
+            raise ValueError(f"Unsupported file format: {data}. Only .npy and .npz files are supported.")
     elif isinstance(data, np.ndarray):
-        return data
+        return data  # Already a NumPy array, return as is
     else:
-        raise ValueError(f"Unsupported input type: {type(data)}. Only .npz file paths or numpy arrays are supported.")
-
+        raise ValueError(f"Unsupported input type: {type(data)}. Only .npy/.npz file paths or numpy arrays are supported.")
 
 def get_data_npz(file_path):
     """
@@ -98,6 +102,12 @@ def get_data_npz(file_path):
         return data[data.files[0]]
     else:
         raise ValueError(f"The .npz file '{file_path}' contains multiple arrays: {data.files}. It must contain exactly one array.")
+
+def get_data_npy(file_path):
+    """
+    Loads and returns a numpy array from a .npy file.
+    """
+    return np.load(file_path)
 
 def generate_random_sensor_locations(full_state, num_sensors):
     """

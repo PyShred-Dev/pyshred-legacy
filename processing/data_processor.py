@@ -50,8 +50,10 @@ class SHREDDataProcessor:
         self.transformed_data = {}
         self.full_state_data = get_data(data) # full-state data where the first axis is time (axis 0)
         self.data_spatial_shape = self.full_state_data.shape[1:]
-        self.time = time # numpy array of time stamps associated with `data`
-
+        if time is None:
+            self.time = np.arange(self.full_state_data.shape[0]) # numpy array of time stamps associated with `data`
+        else:
+            self.time = time
         if self.random_sensors is not None or self.stationary_sensors is not None or self.mobile_sensors is not None:
             sensor_measurements_dict = get_sensor_measurements(
                             full_state_data=self.full_state_data,
