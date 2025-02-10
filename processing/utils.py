@@ -165,9 +165,13 @@ def get_sensor_measurements(full_state_data, id, random_sensors, stationary_sens
     sensor_measurements = []
     sensor_id_index = 0
     # generate random sensor locations
+    random_sensor_locations = random_sensors
     if random_sensors is not None:
         if isinstance(random_sensors, int):
             random_sensor_locations = generate_random_sensor_locations(full_state = full_state_data, num_sensors = random_sensors)
+        elif isinstance(random_sensors, tuple):
+            random_sensor_locations = [random_sensors]
+        if all(isinstance(sensor, tuple) for sensor in random_sensor_locations):
             for sensor_coordinate in random_sensor_locations:
                 sensor_summary.append([id, id + '-' + str(sensor_id_index), 'stationary (randomly selected)', sensor_coordinate])
                 sensor_measurements.append(full_state_data[(slice(None),) + sensor_coordinate]) # slice for time axis (all timesteps)
@@ -212,7 +216,8 @@ def get_sensor_measurements(full_state_data, id, random_sensors, stationary_sens
     else:
         sensor_measurements = np.array(sensor_measurements).T
         sensor_measurements = pd.DataFrame(sensor_measurements, columns = sensor_summary['sensor id'].tolist())
-        sensor_measurements.insert(0, 'time', time)
+        if time is not None:
+            sensor_measurements.insert(0, 'time', time)
     return {
         "sensor_measurements": sensor_measurements,
         "sensor_summary": sensor_summary,
@@ -262,16 +267,16 @@ def generate_forecast_lagged_sequences_from_sensor_measurements(sensor_measureme
 
 
 
-def fit_sensors(train_indices, sensor_measurements):
-    """
-    Takes in train_indices, method ("random" or "sequential")
-    Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
-    Scaling: fits either MinMaxScaler or Standard Scaler.
-    Stores fitted scalers as object attributes.
-    """
-    # scaling full-state data
-    scaler = MinMaxScaler()
-    return scaler.fit(sensor_measurements[train_indices])
+# def fit_sensors(train_indices, sensor_measurements):
+#     """
+#     Takes in train_indices, method ("random" or "sequential")
+#     Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
+#     Scaling: fits either MinMaxScaler or Standard Scaler.
+#     Stores fitted scalers as object attributes.
+#     """
+#     # scaling full-state data
+#     scaler = MinMaxScaler()
+#     return scaler.fit(sensor_measurements[train_indices])
 
 
 def transform_sensor(sensor_scaler, sensor_measurements):
@@ -298,17 +303,6 @@ def unflatten(data, spatial_shape):
     original_shape = (data.shape[0],) + spatial_shape
     return data.reshape(original_shape)
 
-def generate_y_train_val_test(data, train_indices, val_indices, test_indices, method):
-    """
-    Generates the target data for SHRED.
-    The target data are full-state data that is compresssed (optional) and scaled (optional),
-    and flattens the state data.
-    Output: 2D numpy array with timesteps along axis 0 and flattened state data along axis 1.
-    """
-    train = data[method][train_indices]
-    val = data[method][val_indices]
-    test = data[method][test_indices]
-    return train, val, test
 
 
 
