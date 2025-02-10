@@ -174,7 +174,7 @@ class SHRED():
         self.predictor_val_errors = None
         self.sensor_forecaster_val_errors = None
 
-    def fit(self, train_dataset, val_dataset,  batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
+    def fit(self, train_dataset, val_dataset,  batch_size=64, num_epochs=1000, lr=1e-3, verbose=True, patience=50):
         """
         Train SHRED using the high-dimensional state space data.
 
@@ -307,13 +307,13 @@ class SHRED():
 
     
 
-def evaluate(shred, test_dataset, data_manager, uncompress = True):
+def evaluate(model, test_dataset, data_manager, uncompress = True):
 
     error_df = pd.DataFrame()
 
-    if shred.reconstructor is not None:
+    if model.reconstructor is not None:
         reconstructor_prediction = \
-            shred.reconstructor(test_dataset.reconstructor_dataset.X).detach().cpu().numpy()
+            model.reconstructor(test_dataset.reconstructor_dataset.X).detach().cpu().numpy()
         reconstructor_prediction_postprocess = \
         data_manager.postprocess(data = reconstructor_prediction,
                                  uncompress = uncompress, method = "reconstructor")
@@ -328,9 +328,9 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True):
             error_df.loc["reconstruction", key] = error.item()
 
 
-    if shred.predictor is not None:
+    if model.predictor is not None:
         predictor_prediction = \
-            shred.predictor(test_dataset.predictor_dataset.X).detach().cpu().numpy()
+            model.predictor(test_dataset.predictor_dataset.X).detach().cpu().numpy()
         predictor_prediction_postprocess = \
             data_manager.postprocess(data = predictor_prediction,
                                     uncompress = uncompress, method = "predictor")
@@ -344,10 +344,10 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True):
             )
             error_df.loc["prediction", key] = error.item()
 
-    if shred.sensor_forecaster is not None and shred.predictor is not None:
+    if model.sensor_forecaster is not None and model.predictor is not None:
         test_size = test_dataset.sensor_forecaster_dataset.X.shape[0]
         # forecasts sensor measurements in test set
-        sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X)
+        sensor_forecaster_prediction = model.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X)
         # pads with known sensor measurements in val set
         sensor_forecaster_prediction = torch.cat((test_dataset.sensor_forecaster_dataset.X[0,:,:],
                                                   sensor_forecaster_prediction), dim=0)
@@ -365,7 +365,7 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True):
         )
 
         forecast_prediction = \
-            shred.predictor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
+            model.predictor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
         forecast_prediction_postprocess = \
             data_manager.postprocess(data = forecast_prediction, uncompress = uncompress, method = "predictor")
         for key in forecast_prediction_postprocess:
@@ -375,8 +375,8 @@ def evaluate(shred, test_dataset, data_manager, uncompress = True):
             )
             error_df.loc["forecast", key] = error.item()
 
-    if shred.sensor_forecaster is not None:
-        sensor_forecaster_prediction = shred.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
+    if model.sensor_forecaster is not None:
+        sensor_forecaster_prediction = model.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
         sensor_forecaster_prediction_postprocess = \
             data_manager.postprocess(data = sensor_forecaster_prediction,
                                      uncompress = uncompress, method = "sensor_forecaster")

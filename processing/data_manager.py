@@ -80,8 +80,8 @@ class SHREDDataManager:
 
         # generate train/val/test indices
         if len(self.data_processors) == 0:
-            self.reconstructor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
-            self.predictor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
+            self.reconstructor_indices = get_train_val_test_indices(len(data_processor.time), self.train_size, self.val_size, self.test_size, method = "random")
+            self.predictor_indices = get_train_val_test_indices(len(data_processor.time), self.train_size, self.val_size, self.test_size, method = "sequential")
 
 
         if 'reconstructor' in self.METHODS[self.method]:
