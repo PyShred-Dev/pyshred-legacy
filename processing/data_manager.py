@@ -21,26 +21,25 @@ class SHREDDataManager:
 
 
     def __init__(self, lags = 20, time = None, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True, method = 'all'):
-        self.compression = compression
-        self.time = time # expects a 1D numpy array
-        self.lags = lags # number of time steps to look back
-        self.data_processors = [] # a list storing SHREDDataProcessor objects
-        self.random_indices = None # a dict storing 'train', 'val', 'test' indices for SHRED reconstructor
-        self.sequential_indices = None # a dict storing 'train', 'val', 'test' indices for SHRED forecastor
+        # Generic
+        self.compression = compression # boolean or int
+        self.lags = lags # number of time steps to look back (int)
         self.train_size = train_size
         self.val_size = val_size
         self.test_size = test_size
-        self.train_dataset = None
-        self.val_dataset = None
-        self.test_dataset = None
-        self.reconstructor = []
-        self.sensor_forecaster = []
-        self.predictor = []
-        self.input_summary = None #
-        self.sensor_measurements = None # all sensor measurement
-        self.method = method
+        self.sensor_summary = None #
+        self.sensor_measurements = None
+        self.reconstructor_indices = None # a dict w/ 'train', 'val', 'test' indices for reconstructor
+        self.reconstructor = [] # stores reconstructor datasets of each field
+        # Specific to SHREDDataManager
+        self.time = time # None or 1D numpy array
+        self.data_processors = [] # a list storing SHREDDataProcessor objects
+        self.predictor_indices = None # a dict w/ 'train', 'val', 'test' indices for predictor and sensor forecaster
+        self.sensor_forecaster = [] # stores sensor forecaster datasets of each field
+        self.predictor = [] # stores predictor datasets of each field
+        self.method = method # 'all', 'reconstruct', 'predict', 'forecast'
 
-    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, time = None):
+    def add(self, data, id, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, time = None):
         """
         Creates and adds a new SHREDDataProcessor object.
         - file path: file path to data (string)
@@ -57,8 +56,7 @@ class SHREDDataManager:
         compression = compression if compression is not None else self.compression
         time = time if time is not None else self.time
 
-
-        # create and initialize SHREDData object
+        # create and initialize SHREDDataProcessor
         data_processor = SHREDDataProcessor(
             data=data,
             random_sensors=random_sensors,
@@ -70,45 +68,45 @@ class SHREDDataManager:
             id=id
         )
 
-        # save sensor-related information to sensor-related attributes
+        # record sensor_summay and sensor_measurements
         if data_processor.sensor_summary is not None and data_processor.sensor_measurements_pd is not None:
-            if self.input_summary is None and self.sensor_measurements is None:
-                self.input_summary = data_processor.sensor_summary
+            if self.sensor_summary is None and self.sensor_measurements is None:
+                self.sensor_summary = data_processor.sensor_summary
                 self.sensor_measurements = data_processor.sensor_measurements_pd
             else:
-                self.input_summary = pd.concat([self.input_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
+                self.sensor_summary = pd.concat([self.sensor_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
                 self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on='time', how = 'inner')
 
 
         # generate train/val/test indices
         if len(self.data_processors) == 0:
-            self.random_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
-            self.sequential_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
+            self.reconstructor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "random")
+            self.predictor_indices = get_train_val_test_indices(len(time), self.train_size, self.val_size, self.test_size, method = "sequential")
 
 
         if 'reconstructor' in self.METHODS[self.method]:
             dataset_dict = data_processor.generate_dataset(
-                self.random_indices['train'],
-                self.random_indices['val'],
-                self.random_indices['test'],
+                self.reconstructor_indices['train'],
+                self.reconstructor_indices['val'],
+                self.reconstructor_indices['test'],
                 method='reconstructor'
             )
             self.reconstructor.append(dataset_dict)
 
         if 'predictor' in self.METHODS[self.method]:
             dataset_dict = data_processor.generate_dataset(
-                self.sequential_indices['train'],
-                self.sequential_indices['val'],
-                self.sequential_indices['test'],
+                self.predictor_indices['train'],
+                self.predictor_indices['val'],
+                self.predictor_indices['test'],
                 method='predictor' # different name so different scalers etc.
             )
             self.predictor.append(dataset_dict)
 
         if 'sensor_forecaster' in self.METHODS[self.method]:
             dataset_dict = data_processor.generate_dataset(
-                self.sequential_indices['train'],
-                self.sequential_indices['val'],
-                self.sequential_indices['test'],
+                self.predictor_indices['train'],
+                self.predictor_indices['val'],
+                self.predictor_indices['test'],
                 method='sensor_forecaster'
             )
             self.sensor_forecaster.append(dataset_dict)

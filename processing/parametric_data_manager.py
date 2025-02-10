@@ -8,7 +8,7 @@ class ParametricSHREDDataManager:
     methods:
     - add: for creating SHREDData objects and adding to SHREDDataManager
     - remove: for removing SHREDData objects from SHREDDataManager (to be implemented)
-    - preprocess: for generating train, validation, and test SHREDDataset objects
+    - preprocess: for generating train, val, and test SHREDDataset objects
     - postprocess
     """
 
@@ -16,29 +16,24 @@ class ParametricSHREDDataManager:
     # TODO: sensor summary will also need to include parameter summary
     # TODO: each sensor and parameter can be identified to a dataset/field/regime with the unique id of the SHREDDataProcessor
 
-    def __init__(self, lags = 20, time = None, train_size = 0.75, val_size = 0.15, test_size = 0.15,
-                 scaling = "minmax", compression = True):
-        self.lags = lags # number of time steps to look back
-        self.scaling = scaling
-        self.compression = compression
-        self.time = time
+
+    def __init__(self, lags = 20, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True):
+        # Generic
+        self.compression = compression # boolean or int
+        self.lags = lags # number of time steps to look back (int)
         self.train_size = train_size
         self.val_size = val_size
         self.test_size = test_size
-    
-        self.data_processors = [] # a list storing references to SHREDDataProcessor objects being managed
-        self.reconstructor_indices = None # a dict storing 'train', 'validation', 'test' indices for SHRED reconstructor
-
-        self.train_dataset = None
-        self.valid_dataset = None
-        self.test_dataset = None
-        self.reconstructor_data_elements = []
-
-        self.input_summary = None
+        self.sensor_summary = None #
         self.sensor_measurements = None
+        self.reconstructor_indices = None # a dict w/ 'train', 'val', 'test' indices for reconstructor
+        self.reconstructor = [] # stores reconstructor datasets of each field
+        # Specific to ParametricSHREDDataManager
+        self.parametric_data_processors = [] # a list storing ParametricSHREDDataProcessor objects
+        self.params = None
 
-    #TODO: allow for sensor measurments as well
-    def add(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, params=None, compression=None, scaling=None, time=None, id=None):
+    #TODO: allow for sensor measurments directly as well
+    def add(self, data, id, random_sensors = None, stationary_sensors = None, mobile_sensors = None, params=None, compression=None):
         """
         Creates and adds a new SHREDDataProcessor object.
         - file path: file path
@@ -55,52 +50,57 @@ class ParametricSHREDDataManager:
         """
         # data = get_data(data) # (n_traj, n_time, n_state)
         compression = compression if compression is not None else self.compression
-        scaling = scaling if scaling is not None else self.scaling
-        time = time if time is not None else self.time
-        
-        # generate train/val/test indices based on number of timesteps in initial SHREDDataProcessor object
-        if len(self.data_processors) == 0:
-            # parametric case, train/val/test split by parameters (trajectories)
-            self.reconstructor_indices = get_train_val_test_indices(data.shape[0], self.train_size, self.val_size, self.test_size, method = "random")
 
-        # create and initialize SHREDData object
+
+        # create and initialize ParametricSHREDDataProcessor
         data_processor = ParametricSHREDDataProcessor(
-            params = params, # add method dependent, might add data from a field without params?
             data=data,
+            params = params, # add method dependent, might add data from a field without params?
             random_sensors=random_sensors,
             stationary_sensors=stationary_sensors,
             mobile_sensors=mobile_sensors,
             lags=self.lags,
-            time=time,
             compression=compression,
-            scaling=scaling,
             id=id,
         )
-        dataset_dict = data_processor.generate_dataset(
-                    self.reconstructor_indices['train'],
-                    self.reconstructor_indices['validation'],
-                    self.reconstructor_indices['test'],
-                    method='random'
-                )
-        self.reconstructor_data_elements.append(dataset_dict)
-        # print('data_processor.sensor_summary',data_processor.sensor_summary)
-        # print('data_processor.sensor_measurements_pd',data_processor.sensor_measurements_pd)
+
+        # record sensor_summay and sensor_measurements
         if data_processor.sensor_summary is not None and data_processor.sensor_measurements_pd is not None:
-            if self.input_summary is None and self.sensor_measurements is None:
-                self.input_summary = data_processor.sensor_summary
+            print('hello')
+            if self.sensor_summary is None and self.sensor_measurements is None:
+                self.sensor_summary = data_processor.sensor_summary
                 self.sensor_measurements = data_processor.sensor_measurements_pd
             else:
-                self.input_summary = pd.concat([self.input_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
+                self.sensor_summary = pd.concat([self.sensor_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
                 self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on=['time', 'trajectory'], how = 'inner')
 
+        # record param_summay and param_measurements
+        if data_processor.params_pd is not None:
+            if self.params is None:
+                self.params = data_processor.params_pd
+            else:
+                params = pd.merge(self.params, data_processor.params_pd, on=['time', 'trajectory'], how = 'inner')
+
+
+        # generate train/val/test indices
+        if len(self.parametric_data_processors) == 0:
+            self.reconstructor_indices = get_train_val_test_indices(data.shape[0], self.train_size, self.val_size, self.test_size, method = "random") # split randomly by trajectories
+
+        dataset_dict = data_processor.generate_dataset(
+            self.reconstructor_indices['train'],
+            self.reconstructor_indices['val'],
+            self.reconstructor_indices['test'],
+        )
+        self.reconstructor.append(dataset_dict)
+
         data_processor.discard_data()
-        self.data_processors.append(data_processor)
+        self.parametric_data_processors.append(data_processor)
         
     
 
     def preprocess(self):
         """
-        Generates train, validation, and test SHREDDataset objects.
+        Generates train, val, and test SHREDDataset objects.
         """
 
         def concatenate_datasets(existing_X, existing_y, new_X, new_y):
@@ -139,12 +139,12 @@ class ParametricSHREDDataManager:
         # X_test_forecast, y_test_forecast = None, None
 
         # Process reconstructor datasets
-        for dataset_dict in self.reconstructor_data_elements:
+        for dataset_dict in self.reconstructor:
             X_train_recon, y_train_recon = concatenate_datasets(
                 X_train_recon, y_train_recon, dataset_dict['train'][0], dataset_dict['train'][1]
             )
             X_valid_recon, y_valid_recon = concatenate_datasets(
-                X_valid_recon, y_valid_recon, dataset_dict['validation'][0], dataset_dict['validation'][1]
+                X_valid_recon, y_valid_recon, dataset_dict['val'][0], dataset_dict['val'][1]
             )
             X_test_recon, y_test_recon = concatenate_datasets(
                 X_test_recon, y_test_recon, dataset_dict['test'][0], dataset_dict['test'][1]
@@ -186,20 +186,16 @@ class ParametricSHREDDataManager:
 
 
 
-    def postprocess(self, data, uncompress = None, unscale = None):
-        uncompress = uncompress if uncompress is not None else self.compression is not None
-        unscale = unscale if unscale is not None else self.scaling == "minmax" # prob change to boolean
+    def postprocess(self, data, uncompress = True):
         results = {}
         start_index = 0
-        for data_processor in self.data_processors:
+        for data_processor in self.parametric_data_processors:
             field_spatial_dim = data_processor.Y_spatial_dim
-            print('field_spatial_dim',field_spatial_dim)
             field_data = data[:, start_index:start_index+field_spatial_dim]
             if isinstance(data, torch.Tensor):
                 field_data = field_data.detach().cpu().numpy()
             start_index = field_spatial_dim + start_index
-            print('field_data.shape',field_data.shape)
-            field_data = data_processor.inverse_transform(field_data, uncompress, unscale)
+            field_data = data_processor.inverse_transform(field_data, uncompress)
             results[data_processor.id] = field_data
         return results
     
@@ -212,10 +208,10 @@ class ParametricSHREDDataManager:
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
-        for data_processor in self.data_processors:
+        for data_processor in self.parametric_data_processors:
             end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
             field_measurements = measurements[:,start_sensor:end_sensor]
-            result = data_processor.generate_X_New(field_measurements) # (n_traj, n_time, n_sensors + n_params)
+            result = data_processor.generate_X(field_measurements) # (n_traj, n_time, n_sensors + n_params)
 
 
 
@@ -224,7 +220,7 @@ class ParametricSHREDDataManager:
         # start_sensor = 0
         # if start is None and end is None:
         #     # generate lagged sequences from measurements
-        #     for data_processor in self.data_processors:
+        #     for data_processor in self.parametric_data_processors:
         #         end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
         #         result = data_processor.transform_X(measurements[:,start_sensor:end_sensor])
         #         if results is None:
@@ -235,7 +231,7 @@ class ParametricSHREDDataManager:
         #     results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
         # else:
         #     # generate lagged sequences from start to end (inclusive)
-        #     for data_processor in self.data_processors:
+        #     for data_processor in self.parametric_data_processors:
         #         if data_processor.sensor_measurements is not None:
         #             end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
         #             if measurements is not None:
