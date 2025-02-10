@@ -72,14 +72,14 @@ class ParametricSHREDDataManager:
                 self.sensor_measurements = data_processor.sensor_measurements_pd
             else:
                 self.sensor_summary = pd.concat([self.sensor_summary, data_processor.sensor_summary], axis = 0).reset_index(drop=True)
-                self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on=['time', 'trajectory'], how = 'inner')
+                self.sensor_measurements = pd.merge(self.sensor_measurements, data_processor.sensor_measurements_pd, on=['trajectory'], how = 'inner')
 
         # record param_summay and param_measurements
         if data_processor.params_pd is not None:
             if self.params is None:
                 self.params = data_processor.params_pd
             else:
-                params = pd.merge(self.params, data_processor.params_pd, on=['time', 'trajectory'], how = 'inner')
+                params = pd.merge(self.params, data_processor.params_pd, on=['trajectory'], how = 'inner')
 
 
         # generate train/val/test indices
