@@ -40,7 +40,7 @@ class SHREDDataManager:
         self.sensor_measurements = None # all sensor measurement
         self.method = method
 
-    def add_field(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, time = None):
+    def add(self, data, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, id = None, time = None):
         """
         Creates and adds a new SHREDDataProcessor object.
         - file path: file path to data (string)
