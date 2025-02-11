@@ -353,7 +353,7 @@ class SHREDDataManager:
             # if no forecaster, replace gaps with zeros
             else:
                 results[gap_indices] = 0
-            results_sensor_measurements = self.postprocess_sensor_measurements(data = results, method = method, uncompress=False)
+            results_sensor_measurements = self.postprocess_sensor_measurements(data = results, method = method)
             
             
             
