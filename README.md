@@ -2,12 +2,19 @@
 
 ## Overview
 
-PySHRED is the official Python Package of the SHallow REcurrent Decoder (SHRED).
+PySHRED: A Python Package for SHallow REcurrent Decoders (SHRED) for Spatial-Temporal Systems
 
-## Developers Guide
+## Installation
 
-1. To create conda environment and install all dependencies, run:
-   `conda env create --file environment.yml`
+1. Development Installation (Editable Mode):
+```
+pip install -e .
+```
+
+2. Standard Installation
+```
+pip install .
+```
 
 ## References
 
