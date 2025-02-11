@@ -178,6 +178,7 @@ class SHREDDataProcessor:
             return unflatten(data = data, spatial_shape=self.data_spatial_shape)
         if self.compression is False:
             return unflatten(data = data, spatial_shape=self.data_spatial_shape)
+        print('hello')
         return data
     
     def inverse_transform_sensor_measurements(self, data, method):

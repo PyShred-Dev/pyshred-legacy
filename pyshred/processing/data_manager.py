@@ -245,7 +245,7 @@ class SHREDDataManager:
 
         return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
 
-    def postprocess_sensor_measurements(self, data, method, uncompress = True):
+    def postprocess_sensor_measurements(self, data, method):
             results = None
             start_index = 0
             for data_processor in self.data_processors:

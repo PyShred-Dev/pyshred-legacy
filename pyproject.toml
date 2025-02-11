@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyshred"
+version = "0.1.0"
+description = "PySHRED: A Python Package for SHallow REcurrent Decoders (SHRED) for Spatial-Temporal Systems"
+readme = "README.md"
+authors = [{ name = "Kutz Research Group", email = "pyshred1@gmail.com" }]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "torch",
+    "scikit-learn",
+]
+
+[tool.setuptools]
+packages = ["pyshred"]

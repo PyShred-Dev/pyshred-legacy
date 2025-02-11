@@ -1,5 +1,8 @@
 *.npz
 *.pyc
+*.egg-info/
+*.npy
+*.mat
 
 docs/build
 docs/source/_build

@@ -1,45 +1,20 @@
-import sys
-import pandas as pd
-import torch.nn as nn
-from sklearn.utils.extmath import randomized_svd
-import numpy as np
 import copy
-# from tqdm import tqdm
-from torch.utils.data import DataLoader
-import pickle
-
-from processing.utils import generate_lagged_sequences_from_sensor_measurements, l2
-from .process_data import *
-from .reconstruction_result import *
-# from .abstract_shred import AbstractSHRED
-from ...sequence_models.abstract_sequence import AbstractSequence
-from ...decoder_models.abstract_decoder import AbstractDecoder
-# from ..sequence_models.abstract_sequence import AbstractSequence
-# from ..sequence_models.lstm_model import LSTM
-# from ..sequence_models.transformer_model import Transformer
-# from ..decoder_models.sdn_model import SDN
-# from ..decoder_models.abstract_decoder import AbstractDecoder
-from ...decoder_models import *
-from ...sequence_models import *
-from ..forecaster.sensor_forecaster import SENSOR_FORECASTER
-from ..reconstructor.reconstructor import RECONSTRUCTOR
-
-
-# from sdn_module import SDNModule
-# from lstm_module import LSTMModule
-# from app.pyshred.models.decoder_models.sdn.sdn import *
-# from app.pyshred.models.sequence_models.lstm.lstm import *
-# from process_data import *
-# from reconstruction_result import *
+from ...processing.utils import generate_lagged_sequences_from_sensor_measurements, l2
+from ..decoder_models import *
+from ..sequence_models import *
+from .sensor_forecaster import SENSOR_FORECASTER
+from .reconstructor import RECONSTRUCTOR
+from ..decoder_models.abstract_decoder import AbstractDecoder
+from ..sequence_models.abstract_sequence import AbstractSequence
+import torch
 
 # model registry
 SEQUENCE_MODELS = {
     "LSTM": LSTM,
-    "TRANSFORMER": Transformer
 }
 
 DECODER_MODELS = {
-    "SDN": SDN
+    "SDN": SDN,
 }
 
 
@@ -307,90 +282,7 @@ class SHRED():
 
     
 
-def evaluate(model, test_dataset, data_manager, uncompress = True):
 
-    error_df = pd.DataFrame()
-
-    if model.reconstructor is not None:
-        reconstructor_prediction = \
-            model.reconstructor(test_dataset.reconstructor_dataset.X).detach().cpu().numpy()
-        reconstructor_prediction_postprocess = \
-        data_manager.postprocess(data = reconstructor_prediction,
-                                 uncompress = uncompress, method = "reconstructor")
-        reconstructor_truth_postprocess = \
-            data_manager.postprocess(data = test_dataset.reconstructor_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, method = "reconstructor")
-        for key in reconstructor_prediction_postprocess:
-            error =  l2(
-                torch.tensor(reconstructor_truth_postprocess[key]),
-                torch.tensor(reconstructor_prediction_postprocess[key])
-            )
-            error_df.loc["reconstruction", key] = error.item()
-
-
-    if model.predictor is not None:
-        predictor_prediction = \
-            model.predictor(test_dataset.predictor_dataset.X).detach().cpu().numpy()
-        predictor_prediction_postprocess = \
-            data_manager.postprocess(data = predictor_prediction,
-                                    uncompress = uncompress, method = "predictor")
-        predictor_truth_postprocess = \
-            data_manager.postprocess(data = test_dataset.predictor_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, method = "predictor")
-        for key in predictor_prediction_postprocess:
-            error = l2(
-                torch.tensor(predictor_truth_postprocess[key]),
-                torch.tensor(predictor_prediction_postprocess[key])
-            )
-            error_df.loc["prediction", key] = error.item()
-
-    if model.sensor_forecaster is not None and model.predictor is not None:
-        test_size = test_dataset.sensor_forecaster_dataset.X.shape[0]
-        # forecasts sensor measurements in test set
-        sensor_forecaster_prediction = model.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X)
-        # pads with known sensor measurements in val set
-        sensor_forecaster_prediction = torch.cat((test_dataset.sensor_forecaster_dataset.X[0,:,:],
-                                                  sensor_forecaster_prediction), dim=0)
-        sensor_forecaster_prediction = sensor_forecaster_prediction.detach().cpu().numpy()
-
-        lags = test_dataset.sensor_forecaster_dataset.X.shape[1] - 1 # subtract 'current'
-        lagged_sensor_forecaster_prediction = \
-            generate_lagged_sequences_from_sensor_measurements(sensor_forecaster_prediction, lags)
-        lagged_sensor_forecaster_prediction = lagged_sensor_forecaster_prediction[-test_size:,:,:]
-
-        # Convert to PyTorch tensor
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        lagged_sensor_forecaster_prediction = torch.tensor(
-            lagged_sensor_forecaster_prediction, dtype=torch.float32, device=device
-        )
-
-        forecast_prediction = \
-            model.predictor(lagged_sensor_forecaster_prediction).detach().cpu().numpy()
-        forecast_prediction_postprocess = \
-            data_manager.postprocess(data = forecast_prediction, uncompress = uncompress, method = "predictor")
-        for key in forecast_prediction_postprocess:
-            error = l2(
-                torch.tensor(predictor_truth_postprocess[key]),
-                torch.tensor(forecast_prediction_postprocess[key])
-            )
-            error_df.loc["forecast", key] = error.item()
-
-    if model.sensor_forecaster is not None:
-        sensor_forecaster_prediction = model.sensor_forecaster(test_dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
-        sensor_forecaster_prediction_postprocess = \
-            data_manager.postprocess(data = sensor_forecaster_prediction,
-                                     uncompress = uncompress, method = "sensor_forecaster")
-        sensor_forecaster_truth_postprocess = \
-            data_manager.postprocess(data = test_dataset.sensor_forecaster_dataset.Y.detach().cpu().numpy(),
-                                    uncompress = uncompress, method = "sensor_forecaster")
-        for key in sensor_forecaster_prediction_postprocess:
-            error = l2(
-                torch.tensor(sensor_forecaster_truth_postprocess[key]),
-                torch.tensor(sensor_forecaster_prediction_postprocess[key])
-            )
-            error_df.loc["sensor_forecast", key] = error.item()
-
-    return error_df
 
 
 
