@@ -1,2 +1,11 @@
 *.npz
 *.pyc
+*.egg-info/
+*.npy
+*.mat
+
+docs/build
+docs/source/_build
+docs/source/_static
+docs/source/_templates
+docs/source/build
