@@ -20,6 +20,7 @@ dependencies = [
     "pandas",
     "torch",
     "scikit-learn",
+    "tqdm"
 ]
 
 [tool.setuptools]

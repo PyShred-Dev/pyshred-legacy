@@ -16,6 +16,7 @@ setup(
         "pandas",
         "torch",
         "scikit-learn",
+        "tqdm"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
