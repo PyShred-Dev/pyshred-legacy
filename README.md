@@ -8,7 +8,7 @@ PySHRED: A Python Package for SHallow REcurrent Decoders (SHRED) for Spatial-Tem
 Clone the repository and install the package manually:
 ```bash
 git clone https://github.com/PyShred-Dev/PyShred.git
-cd PyShred
+cd PySHRED
 pip install .
 ```
 
