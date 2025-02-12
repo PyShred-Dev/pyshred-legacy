@@ -4,17 +4,16 @@
 
 PySHRED: A Python Package for SHallow REcurrent Decoders (SHRED) for Spatial-Temporal Systems
 
-## Installation
-
-1. Development Installation (Editable Mode):
-```
-pip install -e .
-```
-
-2. Standard Installation
-```
+### **1. Install from Source**
+Clone the repository and install the package manually:
+```bash
+git clone https://github.com/PyShred-Dev/PyShred.git
+cd PyShred
 pip install .
 ```
+
+### **2. Install from PyPI**
+(coming soon!)
 
 ## References
 
