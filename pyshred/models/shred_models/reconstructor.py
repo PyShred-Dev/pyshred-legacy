@@ -1,5 +1,5 @@
 import torch.nn as nn
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 import torch
 from ...processing.utils import l2

@@ -5,14 +5,14 @@ from .data_processor import *
 class SHREDDataManager:
     """
     SHREDDataManager is the orchestrator of SHREDDataProcessor objects.
-    methods:
+    modes:
     - add: for creating SHREDData objects and adding to SHREDDataManager
     - remove: for removing SHREDData objects from SHREDDataManager (to be implemented)
     - preprocess: for generating train, val, and test SHREDDataset objects
     - postprocess
     """
 
-    METHODS = {
+    MODES = {
         'all': ['reconstructor', 'predictor', 'sensor_forecaster'],
         'reconstruct': ['reconstructor'],
         'predict': ['predictor'],
@@ -20,7 +20,7 @@ class SHREDDataManager:
     }
 
 
-    def __init__(self, lags = 20, time = None, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True, method = 'all'):
+    def __init__(self, lags = 20, time = None, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True, mode = 'all'):
         # Generic
         self.compression = compression # boolean or int
         self.lags = lags # number of time steps to look back (int)
@@ -37,7 +37,7 @@ class SHREDDataManager:
         self.predictor_indices = None # a dict w/ 'train', 'val', 'test' indices for predictor and sensor forecaster
         self.sensor_forecaster = [] # stores sensor forecaster datasets of each field
         self.predictor = [] # stores predictor datasets of each field
-        self.method = method # 'all', 'reconstruct', 'predict', 'forecast'
+        self.mode = mode # 'all', 'reconstruct', 'predict', 'forecast'
 
     def add(self, data, id, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, time = None):
         """
@@ -84,30 +84,30 @@ class SHREDDataManager:
             self.predictor_indices = get_train_val_test_indices(len(data_processor.time), self.train_size, self.val_size, self.test_size, method = "sequential")
 
 
-        if 'reconstructor' in self.METHODS[self.method]:
+        if 'reconstructor' in self.MODES[self.mode]:
             dataset_dict = data_processor.generate_dataset(
                 self.reconstructor_indices['train'],
                 self.reconstructor_indices['val'],
                 self.reconstructor_indices['test'],
-                method='reconstructor'
+                model='reconstructor'
             )
             self.reconstructor.append(dataset_dict)
 
-        if 'predictor' in self.METHODS[self.method]:
+        if 'predictor' in self.MODES[self.mode]:
             dataset_dict = data_processor.generate_dataset(
                 self.predictor_indices['train'],
                 self.predictor_indices['val'],
                 self.predictor_indices['test'],
-                method='predictor' # different name so different scalers etc.
+                model='predictor' # different name so different scalers etc.
             )
             self.predictor.append(dataset_dict)
 
-        if 'sensor_forecaster' in self.METHODS[self.method]:
+        if 'sensor_forecaster' in self.MODES[self.mode]:
             dataset_dict = data_processor.generate_dataset(
                 self.predictor_indices['train'],
                 self.predictor_indices['val'],
                 self.predictor_indices['test'],
-                method='sensor_forecaster'
+                model='sensor_forecaster'
             )
             self.sensor_forecaster.append(dataset_dict)
 
@@ -172,7 +172,7 @@ class SHREDDataManager:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Process random reconstructor datasets
-        if 'reconstructor' in self.METHODS[self.method]:
+        if 'reconstructor' in self.MODES[self.mode]:
             for dataset_dict in self.reconstructor:
                 X_train_reconstructor, y_train_reconstructor = concatenate_datasets(
                     X_train_reconstructor, y_train_reconstructor, dataset_dict['train'][0], dataset_dict['train'][1]
@@ -196,7 +196,7 @@ class SHREDDataManager:
             test_reconstructor_dataset = TimeSeriesDataset(X_test_reconstructor, y_test_reconstructor)
         
         # Process random reconstructor datasets
-        if 'predictor' in self.METHODS[self.method]:
+        if 'predictor' in self.MODES[self.mode]:
             for dataset_dict in self.predictor:
                 X_train_predictor, y_train_predictor = concatenate_datasets(
                     X_train_predictor, y_train_predictor, dataset_dict['train'][0], dataset_dict['train'][1]
@@ -218,7 +218,7 @@ class SHREDDataManager:
             test_predictor_dataset = TimeSeriesDataset(X_test_predictor, y_test_predictor)
 
         # Process forecastor datasets
-        if 'sensor_forecaster' in self.METHODS[self.method]:
+        if 'sensor_forecaster' in self.MODES[self.mode]:
             for dataset_dict in self.sensor_forecaster:
                 X_train_sensor_forecaster, y_train_sensor_forecaster = concatenate_datasets(
                     X_train_sensor_forecaster, y_train_sensor_forecaster, dataset_dict['train'][0], dataset_dict['train'][1]
@@ -245,52 +245,39 @@ class SHREDDataManager:
 
         return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
 
-    def postprocess_sensor_measurements(self, data, method):
-            results = None
-            start_index = 0
-            for data_processor in self.data_processors:
-                if data_processor.sensor_measurements is not None:
-                    num_sensors = data_processor.sensor_measurements.shape[1]
-                    print({start_index},' ',{start_index+num_sensors})
-                    result = data[:, start_index:start_index+num_sensors]
-                    start_index += start_index
-                    result = data_processor.inverse_transform_sensor_measurements(result, method)
-                    if results is None:
-                        results = result
-                    else:
-                        results = np.concatenate((results, result), axis=1)
-            return results
+    def postprocess_sensor_measurements(self, data, mode):
+        model = mode_to_model(mode)
+        results = None
+        start_index = 0
+        for data_processor in self.data_processors:
+            if data_processor.sensor_measurements is not None:
+                num_sensors = data_processor.sensor_measurements.shape[1]
+                result = data[:, start_index:start_index+num_sensors]
+                start_index += num_sensors
+                result = data_processor.inverse_transform_sensor_measurements(result, model)
+                if results is None:
+                    results = result
+                else:
+                    results = np.concatenate((results, result), axis=1)
+        return results
+
+    def postprocess_sensor_measurements_dict(self, data, mode, postprocess = True):
+        model = mode_to_model(mode)
+        results = {}
+        start_index = 0
+        for data_processor in self.data_processors:
+            if data_processor.sensor_measurements is not None:
+                num_sensors = data_processor.sensor_measurements.shape[1]
+                result = data[:, start_index:start_index+num_sensors]
+                if postprocess:
+                    result = data_processor.inverse_transform_sensor_measurements(result, model)
+                start_index += num_sensors
+                results[data_processor.id] = result
+        return results
 
 
-    # def postprocess_sensor_measurements(self, data, method, uncompress = True):
-    #     if method == 'sensor_forecaster':
-    #         results = None
-    #     else:
-    #         results = {}
-    #     start_index = 0
-    #     for data_processor in self.data_processors:
-    #         if method == 'sensor_forecaster':
-    #             if data_processor.sensor_measurements is not None:
-    #                 num_sensors = data_processor.sensor_measurements.shape[1]
-    #                 print({start_index},' ',{start_index+num_sensors})
-    #                 result = data[:, start_index:start_index+num_sensors]
-    #                 start_index += start_index
-    #                 result = data_processor.inverse_transform(result, uncompress, method = method)
-    #                 if results is None:
-    #                     results = result
-    #                 else:
-    #                     results = np.concatenate((results, result), axis=1)
-    #         else:
-    #             field_spatial_dim = data_processor.Y_spatial_dim
-    #             field_data = data[:, start_index:start_index+field_spatial_dim]
-    #             if isinstance(data, torch.Tensor):
-    #                 field_data = field_data.detach().cpu().numpy()
-    #             start_index += field_spatial_dim
-    #             field_data = data_processor.inverse_transform(field_data, uncompress, method)
-    #             results[data_processor.id] = field_data
-    #     return results
-
-    def postprocess(self, data, method, uncompress = True):
+    def postprocess(self, data, mode, postprocess = True):
+        model = mode_to_model(mode)
         results = {}
         start_index = 0
         for data_processor in self.data_processors:
@@ -298,16 +285,15 @@ class SHREDDataManager:
             field_data = data[:, start_index:start_index+field_spatial_dim]
             if isinstance(data, torch.Tensor):
                 field_data = field_data.detach().cpu().numpy()
-            start_index = field_spatial_dim + start_index
-            field_data = data_processor.inverse_transform(field_data, uncompress, method)
+            if postprocess:
+                field_data = data_processor.inverse_transform(field_data, model)
             results[data_processor.id] = field_data
+            start_index = field_spatial_dim + start_index
         return results
 
 
-
-
-
-    def generate_X(self, method, start = None, end = None, sensor_measurements = None, time = None, forecaster=None, return_sensor_measurements = False):
+    def generate_X(self, mode, start = None, end = None, sensor_measurements = None, time = None, forecaster=None, return_sensor_measurements = False):
+        model = mode_to_model(mode)
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         start_sensor = 0
@@ -317,7 +303,7 @@ class SHREDDataManager:
                 if data_processor.sensor_measurements is not None:
                     end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
                     field_measurements = sensor_measurements[:,start_sensor:end_sensor]
-                    result = data_processor.transform_X(field_measurements, method = method)
+                    result = data_processor.transform_X(field_measurements, model = model)
                     if results is None:
                         results = result
                     else:
@@ -333,9 +319,9 @@ class SHREDDataManager:
                     # incorporate sensor measurments and associated time provided by user
                     if sensor_measurements is not None and time is not None:
                         field_measurements = sensor_measurements[:,start_sensor:end_sensor]
-                        result = data_processor.generate_X(end = end, sensor_measurements = field_measurements, time = time, method = method)
+                        result = data_processor.generate_X(end = end, sensor_measurements = field_measurements, time = time, model = model)
                     else:
-                        result = data_processor.generate_X(end = end, sensor_measurements = None, time = None, method = method)
+                        result = data_processor.generate_X(end = end, sensor_measurements = None, time = None, model = model)
                     if results is None:
                         results = result
                     else:
@@ -353,20 +339,11 @@ class SHREDDataManager:
             # if no forecaster, replace gaps with zeros
             else:
                 results[gap_indices] = 0
-            results_sensor_measurements = self.postprocess_sensor_measurements(data = results, method = method)
-            
-            
-            
+            results_sensor_measurements = self.postprocess_sensor_measurements(data = results, mode = mode)
             results_sensor_measurements = np.concatenate((np.zeros((self.lags, results_sensor_measurements.shape[1])), results_sensor_measurements), axis = 0)
-            # print('results_sensor_measurements',results_sensor_measurements.shape)
-            # print('start',start)
-            # print('end+self.lags+1',end+self.lags+1)
             results_sensor_measurements = results_sensor_measurements[start:end+self.lags+1,:]
-
-            # print('results_sensor_measurements',results_sensor_measurements.shape)
             results = generate_lagged_sequences_from_sensor_measurements(results, self.lags)
             results = results[start:end+1,:,:]
-
         results = torch.tensor(results, dtype=torch.float32, device=device)
         if return_sensor_measurements:
             return {

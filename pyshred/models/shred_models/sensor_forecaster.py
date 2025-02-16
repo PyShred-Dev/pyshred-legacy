@@ -1,5 +1,5 @@
 import torch.nn as nn
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 import torch
 from ...processing.utils import l2
@@ -49,6 +49,31 @@ class SENSOR_FORECASTER(nn.Module):
         h_out = self._sequence_model(x)
         output = self._decoder_model(h_out)
         return output
+ 
+
+    def forecast(self, initial_lags, forecast_horizon):
+        """
+        Performs a rolling forecast where predictions at t+1 are fed back into the model.
+
+        Args:
+            initial_lags (torch.Tensor): Initial test input of shape (lags, n_sensors).
+            forecast_horizon (int): Number of steps into the future to predict.
+
+        Returns:
+            torch.Tensor: Rolling forecast predictions of shape (batch_size, forecast_horizon, num_sensors).
+        """
+        predictions = []
+        current_input = initial_lags.clone()
+        for _ in range(forecast_horizon):
+            # Predict next step (t+1)
+            pred_Y = self.forward(current_input.unsqueeze(0)) # Add batch dim: (1, lags, n_sensors)
+            pred_Y = pred_Y.squeeze(0)  # Remove batch dim -> Shape: (n_sensors,)
+            pred_Y = self(current_input)
+            predictions.append(pred_Y)
+            current_input = torch.cat([current_input[:, 1:], pred_Y.unsqueeze(1)], dim=1)
+
+        return torch.stack(predictions, dim=1)  # Shape: (batch_size, forecast_horizon, num_sensors)
+
     
     def fit(self,model, train_dataset, val_dataset, num_sensors, output_size, batch_size, num_epochs, lr, verbose, patience):
         """

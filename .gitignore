@@ -1,7 +1,6 @@
 *.npz
 *.pyc
 *.egg-info/
-*.npy
 *.mat
 
 docs/build

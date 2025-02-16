@@ -5,7 +5,7 @@ from .utils import *
 class SHREDDataProcessor:
     """
     SHREDDataProcessor manages a single dataset.
-    SHREDDataProcessor objects are created by the `add` method in SHREDDataManager.
+    SHREDDataProcessor objects are created by the `add` mode in SHREDDataManager.
     """
 
     def __init__(self, data, random_sensors, stationary_sensors, mobile_sensors, lags, time, compression, id):
@@ -69,7 +69,7 @@ class SHREDDataProcessor:
 
 
 
-    def generate_dataset(self, train_indices, val_indices, test_indices, method):
+    def generate_dataset(self, train_indices, val_indices, test_indices, model):
         """
         Sets train, val, and test SHREDDataset objects with generated dataset.
         """
@@ -78,14 +78,14 @@ class SHREDDataProcessor:
         is_sensor_forecaster = False
         # Generate X
         if self.sensor_measurements is not None:
-            if method == "sensor_forecaster":
-                method = "predictor" # sensor_forecaster uses same train_indices as predictor, thus same scalers
+            if model == "sensor_forecaster":
+                model = "predictor" # sensor_forecaster uses same train_indices as predictor, thus same scalers
                 is_sensor_forecaster = True
             scaler = MinMaxScaler()
-            self.sensor_scaler[method] = scaler.fit(self.sensor_measurements[train_indices])
-            self.transformed_sensor_data[method] = self.sensor_scaler[method].transform(self.sensor_measurements)
+            self.sensor_scaler[model] = scaler.fit(self.sensor_measurements[train_indices])
+            self.transformed_sensor_data[model] = self.sensor_scaler[model].transform(self.sensor_measurements)
             if is_sensor_forecaster is True:
-                lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
+                lagged_sensor_sequences = generate_forecast_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[model], self.lags)
                 X_train = lagged_sensor_sequences[train_indices, :,:]
                 y_train = lagged_sensor_sequences[train_indices+1,-1,:]
                 X_val = lagged_sensor_sequences[val_indices, :, :]
@@ -97,24 +97,24 @@ class SHREDDataProcessor:
                     'val': (X_val, y_val),
                     'test': (X_test, y_test)
                 }
-            lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[method], self.lags)
+            lagged_sensor_sequences = generate_lagged_sequences_from_sensor_measurements(self.transformed_sensor_data[model], self.lags)
             X_train = lagged_sensor_sequences[train_indices]
             X_val = lagged_sensor_sequences[val_indices]
             X_test = lagged_sensor_sequences[test_indices]
 
-        if method == 'reconstructor' or (method == 'predictor' and is_sensor_forecaster is False):
+        if model == 'reconstructor' or (model == 'predictor' and is_sensor_forecaster is False):
             # Generate Y
             # flattens full state data into into 2D array with time along axis 0.
             self.full_state_data = flatten(self.full_state_data)
             # fit
-            self.fit(train_indices, method)
+            self.fit(train_indices, model)
             # transform
-            self.transform(method)
+            self.transform(model)
             # generate y data
-            y_train = self.transformed_data[method][train_indices]
+            y_train = self.transformed_data[model][train_indices]
             self.Y_spatial_dim = y_train.shape[1]
-            y_val = self.transformed_data[method][val_indices]
-            y_test = self.transformed_data[method][test_indices]
+            y_val = self.transformed_data[model][val_indices]
+            y_test = self.transformed_data[model][test_indices]
             self.full_state_data = unflatten(data = self.full_state_data, spatial_shape=self.data_spatial_shape)
         return {
             'train': (X_train, y_train),
@@ -122,9 +122,9 @@ class SHREDDataProcessor:
             'test': (X_test, y_test)
         }
 
-    def fit(self, train_indices, method):
+    def fit(self, train_indices, model):
         """
-        Input: train_indices and method ("random" or "sequential")
+        Input: train_indices and mode ("random" or "sequential")
         Expects self.data to be flattened with time on axis 0.
         Compression: fits standard scaler and save left singular values and singular values
         Stores fitted scalers as object attributes.
@@ -134,60 +134,56 @@ class SHREDDataProcessor:
             # standard scale data
             sc = StandardScaler()
             sc.fit(self.full_state_data[train_indices, :])
-            self.scaler_before_svd[method] = sc
+            self.scaler_before_svd[model] = sc
             full_state_data_std_scaled = sc.transform(self.full_state_data)
             # rSVD
             U, S, V = randomized_svd(full_state_data_std_scaled[train_indices, :], n_components=self.n_components, n_iter='auto')
-            self.right_singular_values[method] = V
-            self.left_singular_values[method] = U
-            self.singular_values[method] = S
+            self.right_singular_values[model] = V
+            self.left_singular_values[model] = U
+            self.singular_values[model] = S
             compressed_full_state_data = full_state_data_std_scaled @ V.transpose()
         scaler = MinMaxScaler()
         if self.n_components is not None:
-            self.scaler[method] = scaler.fit(compressed_full_state_data[train_indices])
+            self.scaler[model] = scaler.fit(compressed_full_state_data[train_indices])
         else:
-            self.scaler[method] = scaler.fit(self.full_state_data[train_indices])
+            self.scaler[model] = scaler.fit(self.full_state_data[train_indices])
 
-    def transform(self, method):
+    def transform(self, model):
         """
         Expects self.full_state_data to be flattened with time on axis 0.
         Generates transfomed data which is self.full_state_data compressed (optional) and scaled (optional).
         """
         # Perform compression if all compression-related attributes exist
-        if self.right_singular_values.get(method) is not None and self.scaler_before_svd[method] is not None:
-            transformed_data = self.scaler_before_svd[method].transform(self.full_state_data)
-            transformed_data = transformed_data @ np.transpose(self.right_singular_values.get(method))
+        if self.right_singular_values.get(model) is not None and self.scaler_before_svd[model] is not None:
+            transformed_data = self.scaler_before_svd[model].transform(self.full_state_data)
+            transformed_data = transformed_data @ np.transpose(self.right_singular_values.get(model))
         else:
             transformed_data = self.full_state_data
-        self.transformed_data[method] = self.scaler[method].transform(transformed_data)
+        self.transformed_data[model] = self.scaler[model].transform(transformed_data)
 
 
-    def inverse_transform(self, data, uncompress, method):
+    def inverse_transform(self, data, model):
         """
         Expects data to be a np array with time on axis 0.
         (Field specific output fron SHRED/Reconstructor)
         """
         # unscale data if scaler exists
-        # (may not exist for sensor_forecaster for some fields)
-        if self.scaler.get(method) is not None:
-            data = self.scaler[method].inverse_transform(data)
+        if self.scaler.get(model) is not None:
+            data = self.scaler[model].inverse_transform(data)
         # uncompress data
-        if self.right_singular_values.get(method) is not None and uncompress is True:
-            data = data @ self.right_singular_values.get(method)
-            data = self.scaler_before_svd[method].inverse_transform(data)
+        if self.right_singular_values.get(model) is not None:
+            data = data @ self.right_singular_values.get(model)
+            data = self.scaler_before_svd[model].inverse_transform(data)
             return unflatten(data = data, spatial_shape=self.data_spatial_shape)
-        if self.compression is False:
-            return unflatten(data = data, spatial_shape=self.data_spatial_shape)
-        print('hello')
         return data
     
-    def inverse_transform_sensor_measurements(self, data, method):
-        if self.sensor_scaler.get(method) is not None:
-            data = self.sensor_scaler[method].inverse_transform(data)
+    def inverse_transform_sensor_measurements(self, data, model):
+        if self.sensor_scaler.get(model) is not None:
+            data = self.sensor_scaler[model].inverse_transform(data)
         return data
 
 
-    def generate_X(self, end, sensor_measurements, time, method):
+    def generate_X(self, end, sensor_measurements, time, model):
         """
         Generates sensor measurements from time = 0
         to time = end. Uses given measurements as
@@ -205,12 +201,12 @@ class SHREDDataProcessor:
             for i in range(len(time)):
                 if time[i] < complete_measurements.shape[0]:
                     complete_measurements[time[i],:] = sensor_measurements[i,:]
-        complete_measurements = self.sensor_scaler[method].transform(complete_measurements)
+        complete_measurements = self.sensor_scaler[model].transform(complete_measurements)
         return complete_measurements
 
     # used for transforming raw new sensor measurements
-    def transform_X(self, measurements, method):
-        return self.sensor_scaler[method].transform(measurements)
+    def transform_X(self, measurements, model):
+        return self.sensor_scaler[model].transform(measurements)
 
 
     def discard_data(self):
