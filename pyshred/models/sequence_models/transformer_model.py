@@ -44,9 +44,9 @@ class TRANSFORMER(AbstractSequence):
             "final_hidden_state": x[:,-1,:] # last timestep
         }
 
+
     def _generate_square_subsequent_mask(self, sequence_length: int, device) -> torch.Tensor:
-        # print('sequence_length', sequence_length)
-        mask = torch.triu(torch.ones(sequence_length, sequence_length, device=device)) == 0
+        mask = torch.triu(torch.ones(sequence_length, sequence_length, device=device), diagonal=1).bool()
         return mask
 
 

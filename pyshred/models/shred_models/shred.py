@@ -254,7 +254,7 @@ class SHRED():
             val_set = val_dataset.sensor_forecaster_dataset
             input_size = train_set.X.shape[2] # nsensors + nparams
             output_size = val_set.Y.shape[1]
-            self._sequence_model_sensor_forecaster.initialize(input_size)
+            self._sequence_model_sensor_forecaster.initialize(input_size=input_size, lags=lags)
             self._sequence_model_sensor_forecaster.to(device)
             self._decoder_model_sensor_forecaster.initialize(self._sequence_model_sensor_forecaster.output_size, output_size)
             self._decoder_model_sensor_forecaster.to(device)
