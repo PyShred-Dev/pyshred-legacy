@@ -25,12 +25,7 @@ class TRANSFORMER(AbstractSequence):
                                       ,hidden_size=self.d_model,
                                       num_layers=2,
                                       batch_first=True)
-        # self.lstm = nn.LSTM(
-        #     input_size=self.input_size,
-        #     hidden_size=self.hidden_size,
-        #     num_layers=self.num_layers,
-        #     batch_first=True
-        # )
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         super().forward(x)
@@ -40,7 +35,7 @@ class TRANSFORMER(AbstractSequence):
         # Apply positional encoding
         x = self.pos_encoder(x)
         # Apply transformer encoder
-        x = self.transformer_encoder(x, self._generate_square_subsequent_mask(x.size(1)))
+        x = self.transformer_encoder(x, self._generate_square_subsequent_mask(x.size(1), x.device))
         # Apply U-Net decoder
         # x = self.unet_decoder(x)
         # return x # [batch_size, sequence_length, d_model]
@@ -49,10 +44,11 @@ class TRANSFORMER(AbstractSequence):
             "final_hidden_state": x[:,-1,:] # last timestep
         }
 
-    def _generate_square_subsequent_mask(self, sequence_length: int) -> torch.Tensor:
+    def _generate_square_subsequent_mask(self, sequence_length: int, device) -> torch.Tensor:
         # print('sequence_length', sequence_length)
-        mask = torch.triu(torch.ones(sequence_length, sequence_length)) == 0
+        mask = torch.triu(torch.ones(sequence_length, sequence_length, device=device)) == 0
         return mask
+
 
     @property
     def model_name(self):
