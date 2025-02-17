@@ -10,7 +10,7 @@ If you do not need example datasets, you can skip the git lfs steps.
 ```bash
 # Clone the repository
 git clone https://github.com/PyShred-Dev/PyShred.git
-cd PyShred
+cd pyshred
 
 # Ensure Git LFS is set up (needed for example datasets)
 git lfs install
