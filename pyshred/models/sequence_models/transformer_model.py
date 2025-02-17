@@ -35,7 +35,7 @@ class TRANSFORMER(AbstractSequence):
         # Apply positional encoding
         x = self.pos_encoder(x)
         # Apply transformer encoder
-        x = self.transformer_encoder(x, self._generate_square_subsequent_mask(x.size(1), x.device))
+        x = self.transformer_encoder(x, self._generate_square_subsequent_mask(x.size(1), x.device).to(torch.bool))
         # Apply U-Net decoder
         # x = self.unet_decoder(x)
         # return x # [batch_size, sequence_length, d_model]
