@@ -24,7 +24,9 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["pyshred", "pyshred.models", "pyshred.datasets", "pyshred.processing"]  # Explicitly list sub-packages
+packages = ["pyshred", "pyshred.models", "pyshred.models.decoder_models",
+            "pyshred.models.sequence_models", "pyshred.models.shred_models"]
+
 include-package-data = true
 
 [tool.setuptools.package-data]
