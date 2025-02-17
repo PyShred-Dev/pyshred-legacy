@@ -149,7 +149,7 @@ class SHRED():
         self.predictor_val_errors = None
         self.sensor_forecaster_val_errors = None
 
-    def fit(self, train_dataset, val_dataset,  batch_size=64, num_epochs=1000, lr=1e-3, verbose=True, patience=50):
+    def fit(self, train_dataset, val_dataset,  batch_size=64, num_epochs=1000, lr=1e-3, verbose=True, patience=200):
         """
         Train SHRED using the high-dimensional state space data.
 
