@@ -9,7 +9,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/PyShred-Dev/PyShred",
-    packages=find_packages(),
+    packages=find_packages(include=["pyshred", "pyshred.*"]),
     license = "MIT",
     install_requires=[
         "numpy",
@@ -24,4 +24,5 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.8',
+    include_package_data=True
 )
