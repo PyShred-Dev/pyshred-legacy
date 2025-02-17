@@ -1,97 +1,81 @@
-from .abstract_sequence import AbstractSequence
-import torch.nn as nn
 import torch
+import math
+import torch.nn as nn
+from .abstract_sequence import AbstractSequence
 
-class Transformer(AbstractSequence):
-    """
-    Transformer-based sequence model.
-    """
-
-    def __init__(self, input_size=None, d_model=64, num_encoder_layers=2, nhead=8, dropout=0.1):
-        """
-        Lazily initialize the Transformer model.
-
-        Parameters:
-        -----------
-        input_size : int, optional
-            The size of the input features. Default is None.
-        d_model : int, optional
-            The size of the hidden state (embedding dimensions). Default is 64.
-        num_encoder_layers : int, optional
-            The number of Transformer encoder layers. Default is 2.
-        nhead : int, optional
-            The number of attention heads. Default is 8.
-        dropout : float, optional
-            Dropout probability. Default is 0.1.
-        """
-        super().__init__(input_size=input_size, output_size=d_model)
-        self.input_size = input_size
+class TRANSFORMER(AbstractSequence):
+    def __init__(self, d_model: int = 128, nhead: int = 16, dropout: float = 0.2):
+        super().__init__()
         self.d_model = d_model
-        self.num_encoder_layers = num_encoder_layers
-        self.nhead = nhead
         self.dropout = dropout
-        self.encoder = None
-        self.input_projection = None
-        self.is_initialized = False
+        # self.pos_encoder = PositionalEncoding(d_model, sequence_length, dropout)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward=128, dropout=dropout, activation=nn.GELU(), batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=1)
+        self.relu = nn.ReLU()
+        self.output_size = d_model
+        # self.unet_decoder = UNetDecoder(input_size=d_model, output_size = 50, dropout = dropout)
 
-    def initialize(self, input_size):
-        """
-        Initialize the Transformer model with the input size.
-
-        Parameters:
-        -----------
-        input_size : int
-            The size of the input features.
-        """
+    def initialize(self, input_size:int, lags:int, **kwargs):
         super().initialize(input_size)
+        sequence_length = lags
+        self.pos_encoder = PositionalEncoding(self.d_model,
+                                              sequence_length,
+                                              self.dropout)
+        self.input_embedding = nn.GRU(input_size=self.input_size
+                                      ,hidden_size=self.d_model,
+                                      num_layers=2,
+                                      batch_first=True)
+        # self.lstm = nn.LSTM(
+        #     input_size=self.input_size,
+        #     hidden_size=self.hidden_size,
+        #     num_layers=self.num_layers,
+        #     batch_first=True
+        # )
 
-        # Add a projection layer if input_size does not match d_model
-        if input_size != self.d_model:
-            self.input_projection = nn.Linear(input_size, self.d_model)
-        
-        # Create Transformer Encoder
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.d_model,
-            nhead=self.nhead,
-            dropout=self.dropout,
-            batch_first=True
-        )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=self.num_encoder_layers)
-
-    def forward(self, x, mask=None):
-        """
-        Forward pass through the Transformer encoder.
-
-        Parameters:
-        -----------
-        x : torch.Tensor
-            Input tensor of shape (batch_size, sequence_length, input_size).
-        mask : torch.Tensor, optional
-            Attention mask for padding or future masking. Shape: 
-            (batch_size, sequence_length). Default is None.
-
-        Returns:
-        --------
-        torch.Tensor
-            Output tensor of shape (batch_size, d_model), representing
-            the final hidden state of the last time step.
-        """
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         super().forward(x)
+        # Apply input embedding
+        # print('in_x', x.shape)
+        x, _= self.input_embedding(x)
+        # Apply positional encoding
+        x = self.pos_encoder(x)
+        # Apply transformer encoder
+        x = self.transformer_encoder(x, self._generate_square_subsequent_mask(x.size(1)))
+        # Apply U-Net decoder
+        # x = self.unet_decoder(x)
+        # return x # [batch_size, sequence_length, d_model]
+        return {
+            "sequence_output": x, # [batch_size, sequence_length, d_model]
+            "final_hidden_state": x[:,-1,:] # last timestep
+        }
 
-        # Project input if needed
-        if self.input_projection is not None:
-            x = self.input_projection(x)
+    def _generate_square_subsequent_mask(self, sequence_length: int) -> torch.Tensor:
+        # print('sequence_length', sequence_length)
+        mask = torch.triu(torch.ones(sequence_length, sequence_length)) == 0
+        return mask
 
-        # Ensure mask is on the same device
-        if mask is not None and mask.device != x.device:
-            mask = mask.to(x.device)
-
-        # Pass through Transformer Encoder
-        encoder_output = self.encoder(x, src_key_padding_mask=mask)
-
-        # Return the last hidden state
-        return encoder_output[:, -1, :]
-    
     @property
     def model_name(self):
         return "Transformer"
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_sequence_length=5000, dropout=0.1):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        # Precompute the positional encodings for a maximum sequence length
+        position = torch.arange(0, max_sequence_length, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pos_encoding = torch.zeros(max_sequence_length, d_model)
+        pos_encoding[:, 0::2] = torch.sin(position * div_term)
+        pos_encoding[:, 1::2] = torch.cos(position * div_term)
+
+        pos_encoding = pos_encoding.unsqueeze(0)  # Shape: (1, max_sequence_length, d_model)
+        self.register_buffer('pe', pos_encoding)
+
+    def forward(self, x):
+        # x.shape: (batch_size, seq_len, d_model)
+        seq_len = x.size(1)
+        pe = self.pe[:, :seq_len, :]  # Adjust to the sequence length of the input
+        x = x + pe
+        return self.dropout(x)

@@ -8,13 +8,15 @@ from ..decoder_models.abstract_decoder import AbstractDecoder
 from ..sequence_models.abstract_sequence import AbstractSequence
 import torch
 
-# model registry
+# model registry, UPPERCASE KEYS ONLY
 SEQUENCE_MODELS = {
     "LSTM": LSTM,
+    "TRANSFORMER": TRANSFORMER,
 }
 
 DECODER_MODELS = {
     "SDN": SDN,
+    "UNET": UNET,
 }
 
 
@@ -209,13 +211,16 @@ class SHRED():
             Number of epochs to wait for improvement before early stopping. Default is 20.
         """
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        train_set = train_dataset.reconstructor_dataset
+        val_set = val_dataset.reconstructor_dataset
+        input_size = train_set.X.shape[2] # nsensors + nparams
+        output_size = val_set.Y.shape[1]
+        lags = train_set.X.shape[1] # lags
         ########################################### SHRED Reconstructor #################################################
         if hasattr(train_dataset, "reconstructor_dataset"):
-            train_set = train_dataset.reconstructor_dataset
-            val_set = val_dataset.reconstructor_dataset
-            input_size = train_set.X.shape[2] # nsensors + nparams
-            output_size = val_set.Y.shape[1]
-            self._sequence_model_reconstructor.initialize(input_size) # initialize with nsensors
+
+
+            self._sequence_model_reconstructor.initialize(input_size=input_size, lags=lags) # initialize with nsensors
             self._sequence_model_reconstructor.to(device)
             self._decoder_model_reconstructor.initialize(input_size = self._sequence_model_reconstructor.output_size, output_size=output_size) # could pass in entire sequence model
             self._decoder_model_reconstructor.to(device)
@@ -231,9 +236,7 @@ class SHRED():
         if hasattr(train_dataset, "predictor_dataset"):
             train_set = train_dataset.predictor_dataset
             val_set = val_dataset.predictor_dataset
-            input_size = train_set.X.shape[2] # nsensors + nparams
-            output_size = val_set.Y.shape[1]
-            self._sequence_model_predictor.initialize(input_size) # initialize with nsensors
+            self._sequence_model_predictor.initialize(input_size=input_size, lags=lags) # initialize with nsensors
             self._sequence_model_predictor.to(device)
             self._decoder_model_predictor.initialize(input_size = self._sequence_model_predictor.output_size, output_size=output_size) # could pass in entire sequence model
             self._decoder_model_predictor.to(device)

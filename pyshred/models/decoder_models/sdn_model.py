@@ -11,7 +11,7 @@ class SDN(AbstractDecoder):
     """
 
 
-    def __init__(self, input_size = None, output_size = None, l1 = 350, l2 = 400, dropout = 0.1):
+    def __init__(self, l1 = 350, l2 = 400, dropout = 0.1):
         super().__init__()
         self.l1 = l1
         self.l2 = l2

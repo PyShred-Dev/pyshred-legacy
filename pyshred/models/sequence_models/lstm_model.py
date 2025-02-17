@@ -14,7 +14,7 @@ class LSTM(AbstractSequence):
         self.output_size = hidden_size
 
 
-    def initialize(self, input_size:int):
+    def initialize(self, input_size:int, **kwargs):
         super().initialize(input_size)
         self.lstm = nn.LSTM(
             input_size=self.input_size,
@@ -39,13 +39,6 @@ class LSTM(AbstractSequence):
             "sequence_output": out,
             "final_hidden_state": h_out[-1].view(-1, self.hidden_size)
         }
-        # # return out, h_out
-        # # if decoder is SDN:
-        # if self.decoder_name == "SDN":
-        #     return h_out[-1].view(-1, self.hidden_size) # final hidden state
-        # # if decoder is UNET:
-        # if self.decoder_name == "UNET":
-        #     return out.permute(0, 2, 1) # per-step features
     
     @property
     def model_name(self):
