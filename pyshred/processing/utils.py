@@ -362,7 +362,7 @@ def evaluate(model, dataset, data_manager = None, postprocess = True):
                 current_window = torch.cat([current_window[:, 1:, :], one_step_forecast.unsqueeze(0)], dim=1)
             rolling_forecasts = np.concatenate(rolling_forecasts, axis=0)
 
-            sensor_forecaster_forecast = np.concatenate((dataset.sensor_forecaster_dataset.X[0,:,:], rolling_forecasts), axis = 0)
+            sensor_forecaster_forecast = np.concatenate((dataset.sensor_forecaster_dataset.X[0,:,:].detach().cpu().numpy(), rolling_forecasts), axis = 0)
             lags = dataset.sensor_forecaster_dataset.X.shape[1] - 1 # subtract 'current'
             lagged_sensor_forecaster_prediction = \
                 generate_lagged_sequences_from_sensor_measurements(sensor_forecaster_forecast, lags)
