@@ -11,6 +11,7 @@ git clone https://github.com/PyShred-Dev/PySHRED.git
 cd PySHRED
 pip install .
 ```
+Note: Installation may take slightly longer than usual since SST sample data in included. All dataset will be moved t Zenodo once PySHRED is officially released.
 
 ### **2. Install from PyPI (Coming Soon!)**
 PySHRED will soon be officially released on PyPI.
