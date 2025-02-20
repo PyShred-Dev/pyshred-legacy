@@ -6,20 +6,11 @@ PySHRED: A Python Package for SHallow REcurrent Decoders (SHRED) for Spatial-Tem
 
 ### **1. Install from Source**
 To install PySHRED manually, follow these steps.
-If you do not need example datasets, you can skip the git lfs steps.
 ```bash
-# Clone the repository
-git clone https://github.com/PyShred-Dev/PyShred.git
-cd pyshred
-
-# Ensure Git LFS is set up (needed for example datasets)
-git lfs install
-git lfs pull  # Download SST data used in SST_Tutorial.ipynb
-
-# Install PySHRED
+git clone https://github.com/PyShred-Dev/PySHRED.git
+cd PySHRED
 pip install .
 ```
-**Note:** Once PySHRED is officially released, datasets will be hosted on Zenodo, and Git LFS will no longer be required.
 
 ### **2. Install from PyPI (Coming Soon!)**
 PySHRED will soon be officially released on PyPI.
@@ -27,7 +18,7 @@ PySHRED will soon be officially released on PyPI.
 ## Documentation (Coming Soon!)
 
 ## Examples and Tutorials:
-- [SST Tutorial](https://github.com/PyShred-Dev/PyShred/blob/main/examples/PySHRED_SST.ipynb)
+- [SST Tutorial](https://github.com/PyShred-Dev/PySHRED/blob/main/examples/SST_Tutorial.ipynb)
 - More examples in the `examples/` directory (coming soon)
 
 ## References
