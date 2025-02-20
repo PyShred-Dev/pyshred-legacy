@@ -11,7 +11,7 @@ git clone https://github.com/PyShred-Dev/PySHRED.git
 cd pyshred
 pip install .
 ```
-**Note:** Once PySHRED is officially released, datasets will be hosted on Zenodo, and Git LFS will no longer be required.
+**Note:** Once PySHRED is officially released, complete datasets will be hosted on Zenodo.
 
 ### **2. Install from PyPI (Coming Soon!)**
 PySHRED will soon be officially released on PyPI.
