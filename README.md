@@ -27,7 +27,7 @@ PySHRED will soon be officially released on PyPI.
 ## Documentation (Coming Soon!)
 
 ## Examples and Tutorials:
-- [SST Tutorial](https://github.com/PyShred-Dev/PyShred/blob/main/examples/PySHRED_SST.ipynb)
+- [SST Tutorial](https://github.com/PyShred-Dev/PySHRED/blob/main/examples/PySHRED_SST.ipynb)
 - More examples in the `examples/` directory (coming soon)
 
 ## References
