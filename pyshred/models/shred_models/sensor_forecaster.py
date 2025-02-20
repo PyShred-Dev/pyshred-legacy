@@ -6,32 +6,22 @@ from ...processing.utils import l2
 
 class SENSOR_FORECASTER(nn.Module):
     """
-    The SHallow REcurrent Decoder (SHRED) Neural Network.
-    
-    SHRED learns a mapping from trajectories of sensor measurements to a high-dimensional, spatio-temporal state.
+    Sensor Forecaster.
 
-    Attributes:
+    SHallow REcurrent Decoder (SHRED) neural network architecture. SHRED learns a mapping from
+    trajectories of sensor measurements to high-dimensional, spatio-temporal states.
+
+    References:
     -----------
-    sequence : str, optional
-        The sequence model used in SHRED (optional).
-        Choose from:
-            * 'LSTM': Long-short term memory model (default)
-    decoder : str, optional
-        The decoder model used in SHRED (optional).
-        Choose from:
-            * 'SDN': Shallow decoder model (default)
-    
-    Methods:
-    --------
-    fit(data, sensors = 3, compressed = True, batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=5):
-        Train SHRED using the high-dimensional state space data.
-    
-    recon(sensors):
-        Reconstruct the high-dimensional state space from the provided sensor measurements.
+    [1] Jan P. Williams, Olivia Zahn, and J. Nathan Kutz, "Sensing with shallow recurrent
+        decoder networks", arXiv:2301.12011, 2024. Available: https://arxiv.org/abs/2301.12011
 
-    forecast(n):
-        Forecast the high-dimensional state space for `n` timesteps into the future.
+    [2] M.R. Ebers, J.P. Williams, K.M. Steele, and J.N. Kutz, "Leveraging Arbitrary Mobile
+        Sensor Trajectories With Shallow Recurrent Decoder Networks for Full-State Reconstruction,"
+        IEEE Access, vol. 12, pp. 97428-97439, 2024. doi: 10.1109/ACCESS.2024.3423679.
 
+    [3] J. Nathan Kutz, Maryam Reza, Farbod Faraji, and Aaron Knoll, "Shallow Recurrent Decoder
+        for Reduced Order Modeling of Plasma Dynamics", arXiv:2405.11955, 2024. Available: https://arxiv.org/abs/2405.11955
     """
 
     def __init__(self, sequence, decoder):

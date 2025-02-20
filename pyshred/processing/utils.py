@@ -88,6 +88,7 @@ def get_data(data):
     else:
         raise ValueError(f"Unsupported input type: {type(data)}. Only .npy/.npz file paths or numpy arrays are supported.")
 
+
 def get_data_npz(file_path):
     """
     Returns a single numpy array given a .npz file_path
@@ -102,11 +103,13 @@ def get_data_npz(file_path):
     else:
         raise ValueError(f"The .npz file '{file_path}' contains multiple arrays: {data.files}. It must contain exactly one array.")
 
+
 def get_data_npy(file_path):
     """
     Loads and returns a numpy array from a .npy file.
     """
     return np.load(file_path)
+
 
 def generate_random_sensor_locations(full_state, num_sensors):
     """
@@ -126,6 +129,7 @@ def generate_random_sensor_locations(full_state, num_sensors):
         sensor_location = tuple(reversed(sensor_location))
         sensor_locations.append(sensor_location)
     return sensor_locations
+
 
 def generate_lagged_sequences(lags, full_state_data = None, random_sensors = None, stationary_sensors = None, mobile_sensors = None, sensor_measurements = None):
     """
@@ -152,6 +156,7 @@ def generate_lagged_sequences(lags, full_state_data = None, random_sensors = Non
         "lagged_sequences": lagged_sequences,
         "sensor_summary": sensor_summary,
     }
+
 
 def get_sensor_measurements(full_state_data, id, random_sensors, stationary_sensors, mobile_sensors, time):
     """
@@ -233,16 +238,6 @@ def get_sensor_measurements(full_state_data, id, random_sensors, stationary_sens
     }
 
 
-
-# def get_parametric_sensor_measurements(full_state_data, id, random_sensors, stationary_sensors, mobile_sensors, time, param):
-#     results = get_sensor_measurements(full_state_data, id, random_sensors, stationary_sensors, mobile_sensors, time)
-#     param_df = pd.DataFrame(param, columns=[f"param {i}" for i in range(traj.shape[2])])
-#     # results["sensor_measurements"]
-#     df_combined = pd.concat([results["sensor_measurements"], param_df], axis=1)
-
-
-
-
 def generate_lagged_sequences_from_sensor_measurements(sensor_measurements, lags):
     """
     Generates lagged sequences from sensor_measurments.
@@ -275,19 +270,6 @@ def generate_forecast_lagged_sequences_from_sensor_measurements(sensor_measureme
     return lagged_sequences
 
 
-
-# def fit_sensors(train_indices, sensor_measurements):
-#     """
-#     Takes in train_indices, mode ("random" or "sequential")
-#     Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
-#     Scaling: fits either MinMaxScaler or Standard Scaler.
-#     Stores fitted scalers as object attributes.
-#     """
-#     # scaling full-state data
-#     scaler = MinMaxScaler()
-#     return scaler.fit(sensor_measurements[train_indices])
-
-
 def transform_sensor(sensor_scaler, sensor_measurements):
     """
     Expects self.sensor_measurements to be a 2D nunpy array with time on axis 0.
@@ -295,6 +277,7 @@ def transform_sensor(sensor_scaler, sensor_measurements):
     """
     # Perform scaling if all scaler-related attributes exist
     return sensor_scaler.transform(sensor_measurements)
+
 
 def flatten(data):
     """
@@ -304,6 +287,7 @@ def flatten(data):
     # Reshape the data: keep time (axis 0) and flatten the remaining dimensions
     return data.reshape(data.shape[0], -1)
 
+
 def unflatten(data, spatial_shape):
     """
     Takes in a flatten array where time is along axis 0 and the a tuple spatial shape.
@@ -311,8 +295,6 @@ def unflatten(data, spatial_shape):
     """
     original_shape = (data.shape[0],) + spatial_shape
     return data.reshape(original_shape)
-
-
 
 
 def l2(datatrue, datapred):
@@ -478,10 +460,10 @@ def evaluate(model, dataset, data_manager = None, postprocess = True):
         if model.sensor_forecaster is not None:
             sensor_forecaster_prediction = model.sensor_forecaster(dataset.sensor_forecaster_dataset.X).detach().cpu().numpy()
             sensor_forecaster_prediction_postprocess = \
-                data_manager.postprocess_sensor_measurements_dict(data = sensor_forecaster_prediction,
+                data_manager._postprocess_sensor_measurements_dict(data = sensor_forecaster_prediction,
                                                                   mode = "predict", postprocess = postprocess)
             sensor_forecaster_truth_postprocess = \
-                data_manager.postprocess_sensor_measurements_dict(data = dataset.sensor_forecaster_dataset.Y.detach().cpu().numpy(),
+                data_manager._postprocess_sensor_measurements_dict(data = dataset.sensor_forecaster_dataset.Y.detach().cpu().numpy(),
                                         mode = "predict", postprocess = postprocess)
             for key in forecast_prediction_postprocess:
                 error = l2(
@@ -499,10 +481,10 @@ def evaluate(model, dataset, data_manager = None, postprocess = True):
                 rolling_forecasts.append(one_step_forecast.detach().cpu().numpy())
                 current_window = torch.cat([current_window[:, 1:, :], one_step_forecast.unsqueeze(0)], dim=1)
             rolling_forecasts = np.concatenate(rolling_forecasts, axis=0)
-            rolling_forecasts_postprocess = data_manager.postprocess_sensor_measurements_dict(
+            rolling_forecasts_postprocess = data_manager._postprocess_sensor_measurements_dict(
                 data=rolling_forecasts, mode="predict", postprocess = postprocess
             )
-            sensor_forecaster_truth_postprocess = data_manager.postprocess_sensor_measurements_dict(
+            sensor_forecaster_truth_postprocess = data_manager._postprocess_sensor_measurements_dict(
                 data=dataset.sensor_forecaster_dataset.Y.detach().cpu().numpy(),
                 mode="predict",
                 postprocess = postprocess

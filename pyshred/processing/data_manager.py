@@ -4,12 +4,15 @@ from .data_processor import *
 
 class SHREDDataManager:
     """
-    SHREDDataManager is the orchestrator of SHREDDataProcessor objects.
-    modes:
-    - add: for creating SHREDData objects and adding to SHREDDataManager
-    - remove: for removing SHREDData objects from SHREDDataManager (to be implemented)
-    - preprocess: for generating train, val, and test SHREDDataset objects
-    - postprocess
+    SHREDDataManager manages all data-related tasks.
+    Behind the scenes, it orchastrates SHREDDataProcessor objects.
+
+    Methods
+    ----------
+    - add: Adds a new SHREDDataProcessor object to the SHREDDataManager.
+    - preprocess: Generate SHREDDataset objects for training, validation, and testing.
+    - postprocess: Postprocess the output data by applying inverse transformations to each dataset field.
+    - generate_X: Generate new input data.
     """
 
     MODES = {
@@ -20,14 +23,34 @@ class SHREDDataManager:
     }
 
 
-    def __init__(self, lags = 20, time = None, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True, mode = 'all'):
+    def __init__(self, lags = 20, train_size = 0.8, val_size = 0.1, test_size = 0.1, compression = True, mode = 'all', time = None):
+        """
+        Initialize the SHREDDataManager.
+
+        Parameters
+        ----------
+        lags : int, optional
+            The number of time steps to look back for in input features (default is 20).
+        train_size : float, optional
+            The fraction of the dataset to allocate for training (default is 0.8).
+        val_size : float, optional
+            The fraction of the dataset to allocate for validation (default is 0.1).
+        test_size : float, optional
+            The fraction of the dataset to allocate for testing (default is 0.1).
+        compression : bool or int, optional
+            The number of components retained during compression
+        mode : str, optional
+            Valid options: 'all', 'reconstruct', 'predict', 'forecast' (default is 'all').
+        time : None, optional
+            Currently supports np.arange(len(data)) (default is None).
+        """
         # Generic
         self.compression = compression # boolean or int
         self.lags = lags # number of time steps to look back (int)
         self.train_size = train_size
         self.val_size = val_size
         self.test_size = test_size
-        self.sensor_summary = None #
+        self.sensor_summary = None
         self.sensor_measurements = None
         self.reconstructor_indices = None # a dict w/ 'train', 'val', 'test' indices for reconstructor
         self.reconstructor = [] # stores reconstructor datasets of each field
@@ -41,17 +64,26 @@ class SHREDDataManager:
 
     def add(self, data, id, random_sensors = None, stationary_sensors = None, mobile_sensors = None, compression = None, time = None):
         """
-        Creates and adds a new SHREDDataProcessor object.
-        - file path: file path to data (string)
-        - random_sensors: number of randomly placed stationary sensors (integer).
-        - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
-                              If multiple stationary sensors, put tuples into a list (tuple or list of tuples).
-        - mobile_sensors: list of coordinates (tuple) for a mobile sensor (length of list should match number of timesteps in `data`).
-                          If multiple mobile_sensors, use a nested list (list of tuples, or nested list of tuples).
-        - time: 1D numpy array of timestamps
-        - lags: number of time steps to look back (integer).
-        - compression: dimensionality reduction (boolean or integer).
-        - id: unique identifier for the dataset (string).
+        Adds a new SHREDDataProcessor object to the SHREDDataManager.
+
+        Parameters
+        ----------
+        data : str
+            The file path to a .npy file or numpy array. The first dimension of the numpy array should be
+            the temporal dimension, followed by one or more spatial dimensions.
+        id : str
+            A unique identifier for the dataset.
+        random_sensors : int
+            The number of randomly placed stationary sensors.
+        stationary_sensors : tuple or list of tuples
+            Coordinates of stationary sensors. Provide a single tuple for one sensor or a list of tuples for multiple sensors.
+        mobile_sensors : list of tuples or nested list of tuples
+            Coordinates for mobile sensors. The length of the list should match the number of timesteps in the dataset.
+            For multiple mobile sensors, use a nested list where each inner list contains the coordinates of a sensor.
+        compression : bool or int
+            The number of components retained during compression
+        time : numpy.ndarray, optional
+            Currently supports np.arange(len(data)) (default is None).
         """
         compression = compression if compression is not None else self.compression
         time = time if time is not None else self.time
@@ -98,7 +130,7 @@ class SHREDDataManager:
                 self.predictor_indices['train'],
                 self.predictor_indices['val'],
                 self.predictor_indices['test'],
-                model='predictor' # different name so different scalers etc.
+                model='predictor'
             )
             self.predictor.append(dataset_dict)
 
@@ -117,16 +149,11 @@ class SHREDDataManager:
 
     def preprocess(self):
         """
-        Generates train, val, and test SHREDDataset objects.
+        Generate SHREDDataset objects for training, validation, and testing.
         """
-
         def concatenate_datasets(existing_X, existing_y, new_X, new_y):
-            """
-            Helper function to concatenate datasets along the last axis, handling None values.
-            """
             combined_X = None
             combined_y = None
-
             if existing_X is None:
                 combined_X = new_X
             elif new_X is None:
@@ -194,7 +221,6 @@ class SHREDDataManager:
             train_reconstructor_dataset = TimeSeriesDataset(X_train_reconstructor, y_train_reconstructor)
             val_reconstructor_dataset = TimeSeriesDataset(X_val_reconstructor, y_val_reconstructor)
             test_reconstructor_dataset = TimeSeriesDataset(X_test_reconstructor, y_test_reconstructor)
-        
         # Process random reconstructor datasets
         if 'predictor' in self.MODES[self.mode]:
             for dataset_dict in self.predictor:
@@ -213,11 +239,11 @@ class SHREDDataManager:
             y_val_predictor = torch.tensor(y_val_predictor, dtype=torch.float32, device=device)
             X_test_predictor = torch.tensor(X_test_predictor, dtype=torch.float32, device=device)
             y_test_predictor = torch.tensor(y_test_predictor, dtype=torch.float32, device=device)
+            # Create TimeSeriesDataset objects
             train_predictor_dataset = TimeSeriesDataset(X_train_predictor, y_train_predictor)
             val_predictor_dataset = TimeSeriesDataset(X_val_predictor, y_val_predictor)
             test_predictor_dataset = TimeSeriesDataset(X_test_predictor, y_test_predictor)
-
-        # Process forecastor datasets
+        # Process sensor forecastor datasets
         if 'sensor_forecaster' in self.MODES[self.mode]:
             for dataset_dict in self.sensor_forecaster:
                 X_train_sensor_forecaster, y_train_sensor_forecaster = concatenate_datasets(
@@ -238,12 +264,11 @@ class SHREDDataManager:
             train_sensor_forecaster_dataset = TimeSeriesDataset(X_train_sensor_forecaster, y_train_sensor_forecaster)
             val_sensor_forecaster_dataset = TimeSeriesDataset(X_val_sensor_forecaster, y_val_sensor_forecaster)
             test_sensor_forecaster_dataset = TimeSeriesDataset(X_test_sensor_forecaster, y_test_sensor_forecaster)
-
         SHRED_train_dataset = SHREDDataset(train_reconstructor_dataset, train_predictor_dataset, train_sensor_forecaster_dataset)
         SHRED_val_dataset = SHREDDataset(val_reconstructor_dataset, val_predictor_dataset, val_sensor_forecaster_dataset)
         SHRED_test_dataset = SHREDDataset(test_reconstructor_dataset, test_predictor_dataset, test_sensor_forecaster_dataset)
-
         return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
+
 
     def postprocess_sensor_measurements(self, data, mode):
         model = mode_to_model(mode)
@@ -261,22 +286,28 @@ class SHREDDataManager:
                     results = np.concatenate((results, result), axis=1)
         return results
 
-    def postprocess_sensor_measurements_dict(self, data, mode, postprocess = True):
-        model = mode_to_model(mode)
-        results = {}
-        start_index = 0
-        for data_processor in self.data_processors:
-            if data_processor.sensor_measurements is not None:
-                num_sensors = data_processor.sensor_measurements.shape[1]
-                result = data[:, start_index:start_index+num_sensors]
-                if postprocess:
-                    result = data_processor.inverse_transform_sensor_measurements(result, model)
-                start_index += num_sensors
-                results[data_processor.id] = result
-        return results
-
 
     def postprocess(self, data, mode, postprocess = True):
+        """
+        Postprocess the output data by applying inverse transformations to each dataset field.
+
+        This method splits the concatenated output `data` into separate fields based on the spatial dimensions
+        defined by each data processor. It then optionally applies an inverse transformation to each field,
+        converting the processed data back to its original scale or representation.
+
+        Parameters
+        ----------
+        data : numpy.ndarray or torch.Tensor
+        mode : str
+            Valid options: 'reconstruct', 'predict'
+        postprocess : bool, optional
+            If True, applies the inverse transformations.
+
+        Returns
+        -------
+        results : dict
+            A dictionary mapping each data processor's id its corresponding postprocessed field data.
+        """
         model = mode_to_model(mode)
         results = {}
         start_index = 0
@@ -292,7 +323,38 @@ class SHREDDataManager:
         return results
 
 
-    def generate_X(self, mode, start = None, end = None, sensor_measurements = None, time = None, forecaster=None, return_sensor_measurements = False):
+    def generate_X(self, mode, sensor_measurements = None, start = None, end = None,  time = None, forecaster=None, return_sensor_measurements = False):
+        """
+        Generate new input data.
+
+        Parameters
+        ----------
+        mode : str
+            Valid options: 'reconstruct', 'predict'
+        sensor_measurements : numpy.ndarray, optional
+            A numpy array containing new sensor measurements.
+        start : int, optional
+            The starting timestep.
+        end : int, optional
+            The ending timestep (inclusive).
+        time : numpy.ndarray, optional
+            A 1D array of time values associated with the sensor measurements. Used in combination with `sensor_measurements`.
+        forecaster : SENSOR_FORECASTER, optional
+            A fitted sensor forecastor that predicts missing (gap) values in the generated input data. If no
+            sensor forecaster is provided, gaps are replaced with zeros.
+        return_sensor_measurements : bool, optional
+            If True, returns a dictionary with the generated input data and the processed sensor measurements.
+            The dictionary contains:
+                - 'X': The generated input data as a torch.Tensor.
+                - 'sensor_measurements': The processed sensor measurements, padded and trimmed according to the specified range.
+            If False, only the input data tensor is returned.
+
+        Returns
+        -------
+        torch.Tensor
+            The generated input data as a torch.Tensor.
+        """
+
         model = mode_to_model(mode)
         results = None
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -352,3 +414,18 @@ class SHREDDataManager:
             }
         else:
             return results
+
+
+    def _postprocess_sensor_measurements_dict(self, data, mode, postprocess = True):
+        model = mode_to_model(mode)
+        results = {}
+        start_index = 0
+        for data_processor in self.data_processors:
+            if data_processor.sensor_measurements is not None:
+                num_sensors = data_processor.sensor_measurements.shape[1]
+                result = data[:, start_index:start_index+num_sensors]
+                if postprocess:
+                    result = data_processor.inverse_transform_sensor_measurements(result, model)
+                start_index += num_sensors
+                results[data_processor.id] = result
+        return results

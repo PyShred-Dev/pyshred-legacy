@@ -471,10 +471,8 @@ class ParametricSHREDDataProcessor:
         # nsensors = self.sensor_measurements.shape[1] # make sure measurements dim matches
         # complete_measurements = np.full((timesteps, nsensors), np.nan)
         # if timesteps > len(self.sensor_measurements):
-        #     print('hello')
         #     complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements
         # else:
-        #     print('bye')
         #     complete_measurements[0:timesteps,:] = self.sensor_measurements[0:timesteps,:]
         # if measurements is not None and time is not None:
         #     for i in range(len(time)):

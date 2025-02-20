@@ -1,10 +1,10 @@
-import os
 import numpy as np
+import gzip
+import os
 
-# Define dataset paths
+# SST Demo Data (1000 timesteps)
 DATA_DIR = os.path.dirname(__file__)
-
-# Load datasets
-sst_data = np.load(os.path.join(DATA_DIR, "sst_data.npy"))
-# Define `__all__` for controlled imports
+sst_data_path = os.path.join(DATA_DIR, "demo_sst.npy.gz")
+with gzip.open(sst_data_path, 'rb') as f:
+    sst_data = np.load(f)
 __all__ = ["sst_data"]

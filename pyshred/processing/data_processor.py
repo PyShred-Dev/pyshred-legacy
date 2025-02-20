@@ -11,16 +11,24 @@ class SHREDDataProcessor:
     def __init__(self, data, random_sensors, stationary_sensors, mobile_sensors, lags, time, compression, id):
         """
         Inputs:
-        - data: file path to a .npz file. (string)
-        - random_sensors: number of randomly placed stationary sensors (integer).
-        - stationary_sensors: coordinates of stationary sensors. Each sensor coordinate is a tuple.
-                              If multiple stationary sensors, put tuples into a list (tuple or list of tuples).
-        - mobile_sensors: list of coordinates (tuple) for a mobile sensor (length of list should match number of timesteps in `data`).
-                          If multiple mobile_sensors, use a nested list (list of tuples, or nested list of tuples).
-        - time: 1D numpy array of timestamps
-        - lags: number of time steps to look back (integer).
-        - compression: dimensionality reduction (boolean or integer).
-        - id: unique identifier for the dataset (string).
+        data : str
+            The file path to a .npy file or numpy array. The first dimension of the numpy array should be
+            the temporal dimension, followed by one or more spatial dimensions.
+        id : str
+            A unique identifier for the dataset.
+        random_sensors : int
+            The number of randomly placed stationary sensors.
+        stationary_sensors : tuple or list of tuples
+            Coordinates of stationary sensors. Provide a single tuple for one sensor or a list of tuples for multiple sensors.
+        mobile_sensors : list of tuples or nested list of tuples
+            Coordinates for mobile sensors. The length of the list should match the number of timesteps in the dataset.
+            For multiple mobile sensors, use a nested list where each inner list contains the coordinates of a sensor.
+        compression : bool or int
+            The number of components retained during compression
+        time : numpy.ndarray, optional
+            Currently supports np.arange(len(data)) (default is None).
+        lags : int, optional
+            The number of time steps to look back for in input features (default is 20).
         """
         # Generic
         if compression == True:
@@ -123,12 +131,6 @@ class SHREDDataProcessor:
         }
 
     def fit(self, train_indices, model):
-        """
-        Input: train_indices and mode ("random" or "sequential")
-        Expects self.data to be flattened with time on axis 0.
-        Compression: fits standard scaler and save left singular values and singular values
-        Stores fitted scalers as object attributes.
-        """
         # compression
         if self.n_components is not None:
             # standard scale data
@@ -148,11 +150,8 @@ class SHREDDataProcessor:
         else:
             self.scaler[model] = scaler.fit(self.full_state_data[train_indices])
 
+
     def transform(self, model):
-        """
-        Expects self.full_state_data to be flattened with time on axis 0.
-        Generates transfomed data which is self.full_state_data compressed (optional) and scaled (optional).
-        """
         # Perform compression if all compression-related attributes exist
         if self.right_singular_values.get(model) is not None and self.scaler_before_svd[model] is not None:
             transformed_data = self.scaler_before_svd[model].transform(self.full_state_data)
@@ -163,10 +162,6 @@ class SHREDDataProcessor:
 
 
     def inverse_transform(self, data, model):
-        """
-        Expects data to be a np array with time on axis 0.
-        (Field specific output fron SHRED/Reconstructor)
-        """
         # unscale data if scaler exists
         if self.scaler.get(model) is not None:
             data = self.scaler[model].inverse_transform(data)
@@ -176,7 +171,8 @@ class SHREDDataProcessor:
             data = self.scaler_before_svd[model].inverse_transform(data)
             return unflatten(data = data, spatial_shape=self.data_spatial_shape)
         return data
-    
+
+
     def inverse_transform_sensor_measurements(self, data, model):
         if self.sensor_scaler.get(model) is not None:
             data = self.sensor_scaler[model].inverse_transform(data)

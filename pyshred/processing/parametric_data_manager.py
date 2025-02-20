@@ -4,12 +4,13 @@ from .parametric_data_processor import *
 
 class ParametricSHREDDataManager:
     """
-    SHREDDataManager is the orchestrator of SHREDDataProcessor objects.
-    methods:
-    - add: for creating SHREDData objects and adding to SHREDDataManager
-    - remove: for removing SHREDData objects from SHREDDataManager (to be implemented)
-    - preprocess: for generating train, val, and test SHREDDataset objects
-    - postprocess
+    ParametricSHREDDataManager is the orchestrator of ParametricSHREDDataProcessor objects.
+    
+    Methods
+    ----------
+    - add: Adds a new ParametricSHREDDataProcessor object to the ParametricSHREDDataManager.
+    - preprocess: Generate SHREDDataset objects for training, validation, and testing.
+    - postprocess: Postprocess the output data by applying inverse transformations to each dataset field.
     """
 
     # TODO: Recon, Predict, Forecast, will need sensor summary to notify user order of sensor measurements
@@ -66,7 +67,6 @@ class ParametricSHREDDataManager:
 
         # record sensor_summay and sensor_measurements
         if data_processor.sensor_summary is not None and data_processor.sensor_measurements_pd is not None:
-            print('hello')
             if self.sensor_summary is None and self.sensor_measurements is None:
                 self.sensor_summary = data_processor.sensor_summary
                 self.sensor_measurements = data_processor.sensor_measurements_pd

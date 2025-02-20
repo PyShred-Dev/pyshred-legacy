@@ -1,5 +1,4 @@
 import copy
-from ...processing.utils import generate_lagged_sequences_from_sensor_measurements, l2
 from ..decoder_models import *
 from ..sequence_models import *
 from .sensor_forecaster import SENSOR_FORECASTER
@@ -25,59 +24,6 @@ class SHRED():
     SHallow REcurrent Decoder (SHRED) neural network architecture. SHRED learns a mapping from
     trajectories of sensor measurements to high-dimensional, spatio-temporal states.
 
-    Parameters:
-    -----------
-    sequence : {"LSTM"}, default="LSTM"
-        The sequence model used in SHRED.
-    decoder : {"SDN"}, default="SDN"
-        The decoder model used in SHRED.
-
-    Attributes:
-    -----------
-    sensor_summary : pandas.DataFrame
-        Summary of the sensors seen during `fit`
-        - row index: row sensor belongs to in `sensor_measurements`
-        - dataset: dataset the sensor belong to
-        - type: either stationary (immobile) or mobile
-        - location/trajectory: 
-            - if `type` is stationary: location of sensor represented as tuple
-            - if `type` is mobile: trajectory of sensor represented as a list of tuples 
-
-    sensor_data : 2d-array of shape (n_sensors, n_timesteps)
-        Sensor data used during `fit`
-    
-    reconstructor_val_errors : numpy.ndarray
-        History of reconstructor val errors at each training epoch.
-    
-    recon_forecast_val_errors : numpy.ndarray
-        History of sensor_forecaster val errors at each training epoch.
-
-    Methods:
-    --------
-    fit(data, sensors, lags = 40, time = None, sensor_forecaster = True, n_components = 20, val_size = 0.2, batch_size=64, num_epochs=4000, lr=1e-3, verbose=True, patience=20):
-        Fit SHRED on trajectories of sensor measurements to perform reconstructions and forecasts of high-dimensional state spaces.
-    
-    summary():
-        Prints out a summary of the fitted SHRED model.
-    
-    predict(start, end, sensor_data = None, sensor_data_time = None):
-        Takes in a start and end time (required). Optional sensor_data and sensor_data_time can be
-        added to improve forecasts (out-of-sample reconstructions).
-    
-    recon(sensor_measurments):
-        Performs full-state reconstructin using only the provided sensor_measurements.
-
-    forecast(timesteps, sensor_data = None, sensor_data_time = None):
-        Forecast the high-dimensional state space `timesteps` into the future.
-        It is a convnience wrapper around `predict(self, start)` for forecasts (out-of-sample reconstructions).
-
-    Notes:
-    ------
-    * The `fit` method requires the number of timesteps in `data` to exceed the value of `lags` (default = 40).
-    * `lags` represents the number of timesteps the model looks back for.
-    * By default SHRED trains on the first 20 principal components of the dataset. For maximum resolution reconstructions,
-      skip dimensionality reduction by setting `n_components=None` when calling `fit()`.
-
     References:
     -----------
     [1] Jan P. Williams, Olivia Zahn, and J. Nathan Kutz, "Sensing with shallow recurrent
@@ -89,14 +35,6 @@ class SHRED():
     
     [3] J. Nathan Kutz, Maryam Reza, Farbod Faraji, and Aaron Knoll, "Shallow Recurrent Decoder
         for Reduced Order Modeling of Plasma Dynamics", arXiv:2405.11955, 2024. Available: https://arxiv.org/abs/2405.11955
-    
-    Examples:
-    ---------
-    >>> from pyshred import SHRED
-    >>> shred = SHRED(sequence = 'LSTM', decoder='SDN')
-    >>> shred.fit(data = data, sensors = sensor, n_components = 20, sensor_forecaster = True)
-    ---------
-
     """
 
 
