@@ -187,10 +187,10 @@ class ParametricSHREDDataManager:
         # test_forecast_dataset = TimeSeriesDataset(X_test_forecast, y_test_forecast)
 
         SHRED_train_dataset = SHREDDataset(train_recon_dataset)
-        SHRED_valid_dataset = SHREDDataset(valid_recon_dataset)
+        SHRED_val_dataset = SHREDDataset(valid_recon_dataset)
         SHRED_test_dataset = SHREDDataset(test_recon_dataset)
 
-        return SHRED_train_dataset, SHRED_valid_dataset, SHRED_test_dataset
+        return SHRED_train_dataset, SHRED_val_dataset, SHRED_test_dataset
     
 
 

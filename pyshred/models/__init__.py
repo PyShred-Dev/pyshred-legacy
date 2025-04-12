@@ -1,5 +1,5 @@
 from .shred_models import SHRED
-from .sequence_models import LSTM, TRANSFORMER
+from .sequence_models import LSTM, TRANSFORMER, GRU
 from .decoder_models import SDN
 
-__all__ = ["SHRED", "LSTM", "TRANSFORMER", "SDN"]
+__all__ = ["SHRED", "LSTM", "TRANSFORMER", "SDN", "GRU"]
