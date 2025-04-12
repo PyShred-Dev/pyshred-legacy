@@ -4,7 +4,7 @@ from .abstract_sequence import AbstractSequence
 
 class GRU(AbstractSequence):
 
-    def __init__(self, hidden_size: int = 64, num_layers: int = 1):
+    def __init__(self, hidden_size: int = 3, num_layers: int = 1):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers

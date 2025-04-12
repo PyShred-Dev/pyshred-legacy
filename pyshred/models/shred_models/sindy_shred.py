@@ -9,6 +9,7 @@ from ..sequence_models.abstract_sequence import AbstractSequence
 import copy
 from .sindy_reconstructor import SINDyRECONSTRUCTOR
 from . import sindy_reconstructor
+from ..sindy_models.sindy import library_size
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -91,7 +92,7 @@ DECODER_MODELS = {
 #         self.coefficient_mask = torch.ones(self.num_replicates, self.library_dim, self.latent_dim, requires_grad=False).to(device)  
 
 class SINDySHRED(torch.nn.Module):
-    def __init__(self,  sequence='LSTM', decoder='SDN', library_dim=10, poly_order=3, include_sine=False, dt=0.03, layer_norm=False):
+    def __init__(self,  sequence='LSTM', decoder='SDN', poly_order=3, include_sine=False, dt=0.03, layer_norm=False):
         super().__init__()
         # Initialize Sequence Model
         if isinstance(sequence, AbstractSequence):
@@ -139,7 +140,6 @@ class SINDySHRED(torch.nn.Module):
         # self.hidden_layers = hidden_layers
         # self.hidden_size = hidden_size
 
-        self.library_dim = library_dim
         self.poly_order = poly_order
         self.include_sine = include_sine
         self.dt = dt
@@ -163,6 +163,7 @@ class SINDySHRED(torch.nn.Module):
             # self.e_sindy = E_SINDy(self.num_replicates, hidden_size, library_dim, poly_order, include_sine).to(device)
             # self.e_sindy = E_SINDy(self.num_replicates, self._sequence_model_reconstructor.output_size, self.library_dim, self.poly_order, self.include_sine).to(device)
             # self.layer_norm_gru = torch.nn.LayerNorm(self._sequence_model_reconstructor.output_size)
+            self.library_dim = library_size(self._sequence_model_reconstructor.hidden_size, self.poly_order, self.include_sine, True)
             self.reconstructor = SINDyRECONSTRUCTOR(sequence=self._sequence_model_reconstructor,
                                                       decoder=self._decoder_model_reconstructor,
                                                       library_dim=self.library_dim,  poly_order=self.poly_order,
