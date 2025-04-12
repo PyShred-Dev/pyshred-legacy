@@ -201,6 +201,7 @@ class E_SINDy(torch.nn.Module):
         num_data, num_replicates, latent_dim = h_replicates.shape
         h_replicates = h_replicates.reshape(num_data * num_replicates, latent_dim)
         library_Thetas = e_sindy_library_torch(h_replicates, self.latent_dim, self.poly_order, self.include_sine)
+        self.library_dim = library_Thetas.shape[-1] #test
         library_Thetas = library_Thetas.reshape(num_data, num_replicates, self.library_dim)
         h_replicates = h_replicates.reshape(num_data, num_replicates, latent_dim)
         h_replicates = h_replicates + torch.einsum('ijk,jkl->ijl', library_Thetas, (self.coefficients * self.coefficient_mask)) * dt
