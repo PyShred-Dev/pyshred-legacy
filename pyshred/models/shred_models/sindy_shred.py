@@ -124,7 +124,15 @@ class SINDySHRED(torch.nn.Module):
             self._decoder_model_sensor_forecaster = DECODER_MODELS[decoder]()
         else:
             raise ValueError("invalid type for 'decoder'. Must be str or an AbstractDecoder instance.")
+        
+        self.sensor_forecaster = None
+        self.reconstructor = None
+        self.predictor = None
 
+        self.reconstructor_val_errors = None
+        self.predictor_val_errors = None
+        self.sensor_forecaster_val_errors = None
+        
         # self.gru = torch.nn.GRU(input_size=input_size, hidden_size=hidden_size,
         #                                 num_layers=hidden_layers, batch_first=True).to(device)
         self.num_replicates = 10
@@ -189,7 +197,9 @@ class SINDySHRED(torch.nn.Module):
 
         return result
     
-
+    def reconstruct(self, x):
+        return self.reconstructor(x).detach().cpu().numpy()
+        
     # def forward(self, x, sindy=False):
     #     h_0 = torch.zeros((self.hidden_layers, x.size(0), self.hidden_size), dtype=torch.float)
     #     if next(self.parameters()).is_cuda:
