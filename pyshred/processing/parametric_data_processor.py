@@ -454,32 +454,68 @@ class ParametricSHREDDataProcessor:
             original_shape = (-1, self.ntimes) + self.data_spatial_shape
             data = data.reshape(original_shape)
         return data
-    
 
-    def generate_X(self,data):
-        # (n_traj, n_time, n_sensors + n_params)
-        # need to pass in the first lags number of data set well though
+    def generate_X(self, data):
+        # data: (n_traj, n_time, n_sensors + n_params)
         lagged_sequences = None
         for i in range(data.shape[0]):
-            data = data[i]
+            traj_data = data[i]
+            traj_lagged = generate_lagged_sequences_from_sensor_measurements(traj_data, self.lags)
             if lagged_sequences is None:
-                lagged_sequences = generate_lagged_sequences_from_sensor_measurements(data, self.lags)
+                lagged_sequences = traj_lagged
             else:
-                lagged_sequences = np.concatenate((lagged_sequences, generate_lagged_sequences_from_sensor_measurements(data, self.lags)), 0)
+                lagged_sequences = np.concatenate((lagged_sequences, traj_lagged), axis=0)
 
-        # timesteps = end+1 # end_time inclusive
-        # nsensors = self.sensor_measurements.shape[1] # make sure measurements dim matches
-        # complete_measurements = np.full((timesteps, nsensors), np.nan)
-        # if timesteps > len(self.sensor_measurements):
-        #     complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements
-        # else:
-        #     complete_measurements[0:timesteps,:] = self.sensor_measurements[0:timesteps,:]
-        # if measurements is not None and time is not None:
-        #     for i in range(len(time)):
-        #         if time[i] < complete_measurements.shape[0]:
-        #             complete_measurements[time[i],:] = measurements[i,:]
-        complete_measurements = self.sensor_scaler['random'].transform(complete_measurements)
-        return complete_measurements
+        # Flatten lagged_sequences to 2D: (n_samples * lags, n_features)
+        original_shape = lagged_sequences.shape  # (N, L, F)
+        lagged_flat = lagged_sequences.reshape(-1, original_shape[-1])
+        
+        # Transform using the scaler.
+        transformed_flat = self.sensor_scaler.transform(lagged_flat)
+        
+        # Reshape back to the original 3D shape.
+        lagged_sequences_transformed = transformed_flat.reshape(original_shape)
+        return lagged_sequences_transformed
+
+
+    # def generate_X(self, data):
+    #     # (n_traj, n_time, n_sensors + n_params)
+    #     lagged_sequences = None
+    #     for i in range(data.shape[0]):
+    #         traj_data = data[i]  # Use a different variable for the trajectory data
+    #         traj_lagged = generate_lagged_sequences_from_sensor_measurements(traj_data, self.lags)
+    #         if lagged_sequences is None:
+    #             lagged_sequences = traj_lagged
+    #         else:
+    #             lagged_sequences = np.concatenate((lagged_sequences, traj_lagged), axis=0)
+    #     print('lagged_sequences', lagged_sequences.shape)
+    #     lagged_sequences = self.sensor_scaler.transform(lagged_sequences)
+    #     return lagged_sequences    
+
+    # def generate_X(self,data):
+    #     # (n_traj, n_time, n_sensors + n_params)
+    #     # need to pass in the first lags number of data set well though
+    #     lagged_sequences = None
+    #     for i in range(data.shape[0]):
+    #         data = data[i]
+    #         if lagged_sequences is None:
+    #             lagged_sequences = generate_lagged_sequences_from_sensor_measurements(data, self.lags)
+    #         else:
+    #             lagged_sequences = np.concatenate((lagged_sequences, generate_lagged_sequences_from_sensor_measurements(data, self.lags)), 0)
+
+    #     # timesteps = end+1 # end_time inclusive
+    #     # nsensors = self.sensor_measurements.shape[1] # make sure measurements dim matches
+    #     # complete_measurements = np.full((timesteps, nsensors), np.nan)
+    #     # if timesteps > len(self.sensor_measurements):
+    #     #     complete_measurements[0:len(self.sensor_measurements),:] = self.sensor_measurements
+    #     # else:
+    #     #     complete_measurements[0:timesteps,:] = self.sensor_measurements[0:timesteps,:]
+    #     # if measurements is not None and time is not None:
+    #     #     for i in range(len(time)):
+    #     #         if time[i] < complete_measurements.shape[0]:
+    #     #             complete_measurements[time[i],:] = measurements[i,:]
+    #     complete_measurements = self.sensor_scaler['random'].transform(complete_measurements)
+    #     return complete_measurements
 
     # used for transforming raw new sensor measurements
     def transform_X(self, measurements):

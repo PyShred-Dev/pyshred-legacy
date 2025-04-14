@@ -195,7 +195,7 @@ class ParametricSHREDDataManager:
 
 
 
-    def postprocess(self, data, uncompress = True):
+    def postprocess(self, data, postprocess = True, mode = "reconstruct"):
         results = {}
         start_index = 0
         for data_processor in self.parametric_data_processors:
@@ -204,28 +204,94 @@ class ParametricSHREDDataManager:
             if isinstance(data, torch.Tensor):
                 field_data = field_data.detach().cpu().numpy()
             start_index = field_spatial_dim + start_index
-            field_data = data_processor.inverse_transform(field_data, uncompress)
+            field_data = data_processor.inverse_transform(field_data, postprocess)
             results[data_processor.id] = field_data
         return results
     
 
     def generate_X(self, measurements, params):
-        # n_traj, n_times, nsensors
-        # n_traj, n_times, nparams
-        # for each field, concatenate the appropriate measurements with the appropriate params
-        # seperate out params measurements from sensor measurements, so it is clear the order of params and which belong to which dataset
-        results = None
+        """
+        For each field (i.e., each ParametricSHREDDataProcessor), this method slices out
+        the appropriate sensor measurements and parameter data, concatenates them along
+        the last axis, and then calls the processor's generate_X method.
+        
+        Parameters
+        ----------
+        measurements : np.ndarray
+            Array of sensor measurements with shape (n_traj, n_times, nsensors).
+        params : np.ndarray
+            Array of parameter measurements with shape (n_traj, n_times, nparams).
+        
+        Returns
+        -------
+        torch.Tensor
+            Combined tensor of processed inputs with shape (n_traj, n_times, n_features)
+            where n_features is the sum of the individual processed sensor and parameter features.
+        """
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        results = None
         start_sensor = 0
+        start_param = 0
+
         for data_processor in self.parametric_data_processors:
-            end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
-            field_measurements = measurements[:,start_sensor:end_sensor]
-            result = data_processor.generate_X(field_measurements) # (n_traj, n_time, n_sensors + n_params)
+            # Determine the number of sensor features for this field.
+            n_sensors = data_processor.sensor_measurements.shape[1]
+            end_sensor = start_sensor + n_sensors
 
+            # Determine the number of parameter features for this field, if any.
+            if data_processor.params_pd is not None:
+                n_params = data_processor.params_pd.shape[1]
+            else:
+                n_params = 0
+            end_param = start_param + n_params
 
+            # Slice out the sensor measurements for this field along the last axis.
+            field_measurements = measurements[:, :, start_sensor:end_sensor]
+            
+            # If there are parameter measurements, slice and concatenate.
+            if n_params > 0:
+                field_params = params[:, :, start_param:end_param]
+                # Concatenate along the last axis (features axis).
+                combined_field_data = np.concatenate([field_measurements, field_params], axis=-1)
+            else:
+                combined_field_data = field_measurements
 
+            # Let the data processor generate its X (this might include lagged sequences etc.).
+            field_result = data_processor.generate_X(combined_field_data)
+            # field_result should have shape (n_traj, n_times, n_features_field)
+
+            # Accumulate results from each field.
+            if results is None:
+                results = field_result
+            else:
+                # Concatenate along the feature axis.
+                results = np.concatenate((results, field_result), axis=-1)
+
+            # Update start indices for the next field.
+            start_sensor = end_sensor
+            start_param = end_param
+
+        # Convert final result into a torch tensor on the chosen device.
         results = torch.tensor(results, dtype=torch.float32, device=device)
         return results
+
+    # def generate_X(self, measurements, params):
+    #     # n_traj, n_times, nsensors
+    #     # n_traj, n_times, nparams
+    #     # for each field, concatenate the appropriate measurements with the appropriate params
+    #     # seperate out params measurements from sensor measurements, so it is clear the order of params and which belong to which dataset
+    #     results = None
+    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #     start_sensor = 0
+    #     for data_processor in self.parametric_data_processors:
+    #         end_sensor = start_sensor + data_processor.sensor_measurements.shape[1]
+    #         field_measurements = measurements[:,start_sensor:end_sensor]
+    #         result = data_processor.generate_X(field_measurements) # (n_traj, n_time, n_sensors + n_params)
+
+
+
+    #     results = torch.tensor(results, dtype=torch.float32, device=device)
+    #     return results
         # start_sensor = 0
         # if start is None and end is None:
         #     # generate lagged sequences from measurements
