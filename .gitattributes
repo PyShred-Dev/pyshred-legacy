@@ -1,2 +1,1 @@
-pyshred/datasets/sst_data.npy filter=lfs diff=lfs merge=lfs -text
-pyshred/datasets/*.npy filter=lfs diff=lfs merge=lfs -text
+
