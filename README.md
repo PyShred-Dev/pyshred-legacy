@@ -1,4 +1,6 @@
-# PySHRED
+# PySHRED (Legacy Version)
+⚠️ Warning: This is the legacy version of PySHRED.
+Development and updates have moved to the new pyshred repository. This version is no longer maintained and is preserved for reference and archival purposes.
 
 ## Overview
 
@@ -8,7 +10,7 @@ PySHRED: A Python Package for SHallow REcurrent Decoders (SHRED) for Spatial-Tem
 To install PySHRED manually, follow these steps.
 ```bash
 git clone https://github.com/PyShred-Dev/PySHRED.git
-cd PySHRED
+cd pyshred-legacy
 pip install .
 ```
 Note: Installation may take slightly longer than usual since example SST data in included. All dataset will be moved onto Zenodo once PySHRED is officially released.
