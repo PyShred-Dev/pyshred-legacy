@@ -1,6 +1,11 @@
 # PySHRED (Legacy Version)
+
 ⚠️ Warning: This is the legacy version of PySHRED.
-Development and updates have moved to the new pyshred repository. This version is no longer maintained and is preserved for reference and archival purposes.
+
+Development and maintenance have **moved** to the actively maintained repository:  
+[**PySHRED (current)**](https://github.com/pyshred-dev/pyshred)
+
+This version is no longer maintained and is preserved for archival purposes.
 
 ## Overview
 
